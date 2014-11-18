@@ -1,0 +1,9 @@
+var count = 0;
+var a = 3;
+var b = 3434;
+var c = 232323;
+for (var i=0;i < 100000; ++i)
+{
+    count = a*4+c*444+b/3+i
+}
+return count
