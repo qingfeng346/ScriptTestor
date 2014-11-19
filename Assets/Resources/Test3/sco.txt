@@ -1,0 +1,5 @@
+GameObject = import_type("UnityEngine.GameObject")
+local a = GameObject("123123")
+for (var i=0;i<10000;++i) {
+    a.transform.transform.transform.transform.name = "123123"
+}

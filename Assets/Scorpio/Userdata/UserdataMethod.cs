@@ -4,6 +4,7 @@ using System.Text;
 using System.Reflection;
 using Scorpio;
 using Scorpio.Exception;
+using Scorpio.FastMethod;
 using System.Diagnostics;
 namespace Scorpio.Userdata
 {
@@ -14,6 +15,7 @@ namespace Scorpio.Userdata
         {
             private int m_Type;                     //是普通函数还是构造函数
             private MethodInfo m_Method;            //普通函数对象
+            private FastInvokeHandler m_Handler;    //快速反射委托
             private ConstructorInfo m_Constructor;  //构造函数对象
             public Type[] ParameterType;            //所有参数类型
             public bool Params;                     //是否是变长参数
@@ -36,10 +38,17 @@ namespace Scorpio.Userdata
                 this.ParamType = ParamType;
                 this.Params = Params;
                 this.Args = new object[ParameterType.Length];
+                try {
+                    m_Handler = FastMethodInvoker.GetMethodInvoker(Method);
+                } catch (System.Exception) { }
             }
             public object Invoke(object obj, Type type)
             {
-                return m_Type == 0 ? m_Constructor.Invoke(Args) : m_Method.Invoke(obj, Args);
+                if (m_Type == 1) {
+                    return m_Handler != null ? m_Handler(obj, Args) : m_Method.Invoke(obj, Args);
+                } else {
+                    return m_Constructor.Invoke(Args);
+                }
             }
         }
         private Type m_Type;                            //所在类型
@@ -49,7 +58,8 @@ namespace Scorpio.Userdata
         public UserdataMethod(Type type, string methodName, MethodInfo[] methods)
         {
             List<MethodBase> methodBases = new List<MethodBase>();
-            foreach (MethodInfo method in methods) {
+            foreach (MethodInfo method in methods)
+            {
                 if (method.Name.Equals(methodName))
                     methodBases.Add(method);
             }
@@ -71,13 +81,15 @@ namespace Scorpio.Userdata
             MethodBase method = null;
             List<Type> parameters = new List<Type>();
             int length = methods.Count;
-            for (int i = 0; i < length; ++i) {
+            for (int i = 0; i < length; ++i)
+            {
                 Params = false;
                 ParamType = null;
                 parameters.Clear();
                 method = methods[i];
                 ParameterInfo[] pars = method.GetParameters();
-                foreach (ParameterInfo par in pars) {
+                foreach (ParameterInfo par in pars)
+                {
                     parameters.Add(par.ParameterType);
                     Params = Util.IsParamArray(par);
                     if (Params) ParamType = par.ParameterType.GetElementType();
@@ -125,14 +137,16 @@ namespace Scorpio.Userdata
                         }
                         if (fit) {
                             object[] objs = method.Args;
-                            for (int i = 0; i < length - 1; ++i) {
+                            for (int i = 0; i < length - 1; ++i)
+                            {
                                 objs[i] = Util.ChangeType(parameters[i], method.ParameterType[i]);
                             }
                             List<object> param = new List<object>();
-                            for (int i = length - 1; i < parameters.Length; ++i) {
+                            for (int i = length - 1; i < parameters.Length; ++i)
+                            {
                                 param.Add(Util.ChangeType(parameters[i], method.ParamType));
                             }
-                            objs[length -1] = param.ToArray();
+                            objs[length - 1] = param.ToArray();
                             return method.Invoke(obj, m_Type);
                         }
                     }

@@ -4,6 +4,8 @@ using System.Diagnostics;
 using Scorpio;
 using CSLE;
 using LuaInterface;
+using System.Collections.Generic;
+using System.IO;
 public class ScriptLogger : ICLS_Logger
 {
     public void Log(string str)
@@ -22,9 +24,9 @@ public class ScriptLogger : ICLS_Logger
 public class Test : MonoBehaviour {
     const int Start = 50;
     const int Label_Left = 0;
-    const int Text_Height = 180;
+    const int Text_Height = 150;
     const int Text_Space = 20;
-    const int Script_Space = 200;
+    const int Script_Space = 170;
 
     private string m_Scorpio = "";
     private string m_Lua = "";
@@ -34,8 +36,18 @@ public class Test : MonoBehaviour {
     private string m_LuaRuntime = "Lua";
     private string m_CLSRuntime = "CLS";
 
-    private string[] TestList = new string[] { "Test1", "Test2"};
+    private string[] TestList;
     private int m_Select = -1;
+    void Awake()
+    {
+        string[] Dirs = Directory.GetDirectories(Application.dataPath + "/Resources", "*", SearchOption.TopDirectoryOnly);
+        List<string> Paths = new List<string>();
+        foreach (var dir in Dirs)
+        {
+            Paths.Add(Path.GetFileName(dir));
+        }
+        TestList = Paths.ToArray();
+    }
     void OnGUI()
     {
         int old = m_Select;
