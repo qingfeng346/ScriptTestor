@@ -70,7 +70,7 @@ public class Test : MonoBehaviour {
 
         if (GUI.Button(new Rect(Screen.width / 2 - 100, Screen.height - 70, 200, 50), "Run"))
         {
-            Stopwatch watch = Stopwatch.StartNew();
+            Stopwatch watch = null;
             {
                 watch = Stopwatch.StartNew();
                 Script env = new Script();
