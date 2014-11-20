@@ -7,3 +7,4 @@ local a = GameObject("123123")
 for i=0,10000 do
     a.transform.transform.transform.transform.name = "123123"
 end
+GameObject.Destroy(a);

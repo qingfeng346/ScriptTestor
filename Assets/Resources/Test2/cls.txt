@@ -1,4 +1,4 @@
-for (int i=0;i<10000;i++)
+for (int i=0;i<=10000;i++)
 {
     var a = new GameObject("123123");
     GameObject.Destroy(a);
