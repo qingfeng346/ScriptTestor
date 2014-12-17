@@ -32,10 +32,16 @@ namespace Scorpio.Compiler
             MultiplyOrAssignMultiply,
             /// <summary> % 或者 %= </summary>
             ModuloOrAssignModulo,
-            /// <summary> & 并且 </summary>
-            And,
-            /// <summary> | 或者 </summary>
-            Or,
+            /// <summary> & 或者 &= 或者 && </summary>
+            AndOrCombine,
+            /// <summary> | 或者 |= 或者 || </summary>
+            OrOrInclusiveOr,
+            /// <summary> ^ 或者 ^= </summary>
+            XorOrAssignXor,
+            /// <summary> << 或者 <<= </summary>
+            ShiOrAssignShi,
+            /// <summary> >> 或者 >>= </summary>
+            ShrOrAssignShr,
             /// <summary> ! 非或者不等于 </summary>
             NotOrNotEqual,
             /// <summary> > 大于或者大于等于 </summary>
@@ -46,14 +52,26 @@ namespace Scorpio.Compiler
             String,
             /// <summary> \ 格式符 </summary>
             StringEscape,
+            /// <summary> ' 字符串 单引号开始结束</summary>
+            SingleString,
+            /// <summary> \ 格式符</summary>
+            SingleStringEscape,
             /// <summary> @ 开始字符串 </summary>
             SimpleStringStart,
             /// <summary> @" 不格式化的字符串 类似c# @符号 </summary>
             SimpleString,
             /// <summary> 字符串内出现"是引号还是结束符 </summary>
             SimpleStringQuotationMarkOrOver,
-            /// <summary> 数字 </summary>
+            /// <summary> @" 不格式化的字符串 类似c# @符号 </summary>
+            SingleSimpleString,
+            /// <summary> 字符串内出现"是引号还是结束符 </summary>
+            SingleSimpleStringQuotationMarkOrOver,
+            /// <summary> 十进制数字或者十六进制数字 </summary>
+            NumberOrHexNumber,
+            /// <summary> 十进制数字 </summary>
             Number,
+            /// <summary> 十六进制数字 </summary>
+            HexNumber,
             /// <summary> 描述符 </summary>
             Identifier,
         }
@@ -100,5 +118,15 @@ namespace Scorpio.Compiler
             m_listTokens.Add(new Token(type, lexeme, m_iSourceLine, m_iSourceChar));
             lexState = LexState.None;
         }
+        bool IsHexDigit( char c )
+		{
+			if( Char.IsDigit( c ) )
+				return true;
+			if( 'a' <= c && c <= 'f' )
+				return true;
+			if( 'A' <= c && c <= 'F' )
+				return true;
+			return false;
+		}
     }
 }

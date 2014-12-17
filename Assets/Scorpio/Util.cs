@@ -3,8 +3,9 @@ using System.Collections.Generic;
 using System.Text;
 using System.Reflection;
 using System.IO;
-using Scorpio.Variable;
 using Scorpio;
+using Scorpio.Variable;
+using Scorpio.Exception;
 namespace Scorpio
 {
     public static class Util
@@ -64,7 +65,7 @@ namespace Scorpio
         {
             return type.IsEnum;
         }
-        public static bool IsDelegate(Type type)
+        public static bool IsDelegateType(Type type)
         {
             return TYPE_DELEGATE.IsAssignableFrom(type);
         }
@@ -145,6 +146,8 @@ namespace Scorpio
                     return true;
                 } else if (par is ScriptEnum && (par as ScriptEnum).EnumType == type) {
                     return true;
+                } else if (par is ScriptFunction && IsDelegateType(type)) {
+                    return true;
                 } else if (par is ScriptUserdata) {
                     if (Util.IsType(type) || type.IsAssignableFrom(((ScriptUserdata)par).ValueType))
                         return true;
@@ -171,15 +174,13 @@ namespace Scorpio
         {
             return Convert.ChangeType(value, conversionType);
         }
-        public static object ChangeType_impl(ScriptArray value, Type conversionType)
+        public static void Assert(bool b)
         {
-            int count = value.Count();
-            Type elementType = conversionType.GetElementType();
-            Array array = Array.CreateInstance(elementType, count);
-            for (int i = 0; i < count;++i ) {
-                array.SetValue(ChangeType(value.GetValue(i), elementType), i);
-            }
-            return array;
+            Assert(b, "");
+        }
+        public static void Assert(bool b, string message)
+        {
+            if (!b) throw new ExecutionException(message);
         }
         public static int ToInt32(object value)
         {

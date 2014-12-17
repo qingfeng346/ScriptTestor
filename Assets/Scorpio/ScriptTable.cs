@@ -35,11 +35,11 @@ namespace Scorpio
         {
             return GetValue_impl(key);
         }
-        public void SetValue_impl(object key, ScriptObject scriptObject)
+        private void SetValue_impl(object key, ScriptObject scriptObject)
         {
             Util.SetObject(m_listObject, key, scriptObject);
         }
-        public ScriptObject GetValue_impl(object key)
+        private ScriptObject GetValue_impl(object key)
         {
             return m_listObject.ContainsKey(key) ? m_listObject[key] : ScriptNull.Instance;
         }
@@ -71,5 +71,23 @@ namespace Scorpio
             return ret;
         }
         public override string ToString() { return "Table"; }
+        public override string ToJson()
+        {
+            StringBuilder builder = new StringBuilder();
+            builder.Append("{");
+            bool first = true;
+            foreach (KeyValuePair<object, ScriptObject> pair in m_listObject) {
+                if (first)
+                    first = false;
+                else
+                    builder.Append(",");
+                builder.Append("\"");
+                builder.Append(pair.Key);
+                builder.Append("\":");
+                builder.Append(pair.Value.ToJson());
+            }
+            builder.Append("}");
+            return builder.ToString();
+        }
     }
 }

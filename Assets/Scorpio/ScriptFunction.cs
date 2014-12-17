@@ -35,6 +35,7 @@ namespace Scorpio
         private ScorpioFunction m_Function;                                     //程序函数指针
         private ScorpioHandle m_Handle;                                         //程序函数执行类
         private ScorpioMethod m_Method;                                         //程序函数
+        public ScorpioMethod Method { get { return m_Method; } }                //返回程序函数对象
         private Dictionary<String, ScriptObject> m_stackObject = new Dictionary<String, ScriptObject>();    //函数变量
         public override ObjectType Type { get { return ObjectType.Function; } }
         public ScriptFunction(Script script, ScorpioFunction function) : this(script, function.Method.Name, function) { }
@@ -79,7 +80,7 @@ namespace Scorpio
             if (FunctionType == FunstionType.Script)
                 m_ScriptFunction.SetParentContext(context);
         }
-        public ScriptObject call(params object[] args)
+        public object call(params object[] args)
         {
             int length = args.Length;
             ScriptObject[] parameters = new ScriptObject[length];
@@ -89,17 +90,17 @@ namespace Scorpio
             }
             return Call(parameters);
         }
-        public override ScriptObject Call(ScriptObject[] parameters)
+        public override object Call(ScriptObject[] parameters)
         {
             if (FunctionType == FunstionType.Script) {
                 return m_ScriptFunction.Call(m_stackObject, parameters);
             } else {
                 if (FunctionType == FunstionType.Function) {
-                    return Script.CreateObject(m_Function(parameters));
+                    return m_Function(parameters);
                 } else if (FunctionType == FunstionType.Handle) {
-                    return Script.CreateObject(m_Handle.Call(parameters));
+                    return m_Handle.Call(parameters);
                 } else if (FunctionType == FunstionType.Method) {
-                    return Script.CreateObject(m_Method.Call(parameters));
+                    return m_Method.Call(parameters);
                 }
             }
             return null;
@@ -113,5 +114,6 @@ namespace Scorpio
             return ret;
         }
         public override string ToString() { return "Function(" + Name + ")"; }
+        public override string ToJson() { return "\"Function\""; }
     }
 }

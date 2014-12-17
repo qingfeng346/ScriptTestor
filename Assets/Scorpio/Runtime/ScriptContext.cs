@@ -74,48 +74,16 @@ namespace Scorpio.Runtime
             }
             return false;
         }
-        private bool ContainsVariable(string name)
-        {
-            if (m_variableDictionary.ContainsKey(name))
-                return true;
-            if (m_parent != null)
-                return m_parent.ContainsVariable(name);
-            return false;
-        }
-        private int GetArrayMember(CodeMember member)
-        {
-            if (member.Type == MEMBER_TYPE.NUMBER) {
-                return member.MemberNumber;
-            } else if (member.Type == MEMBER_TYPE.OBJECT) {
-                ScriptObject mem = ResolveOperand(member.Member);
-                if (!(mem is ScriptNumber)) throw new ExecutionException("Array Element 错误的类型:" + mem.Type);
-                return ((ScriptNumber)mem).ToInt32();
-            } else {
-                throw new ExecutionException("Array Element 不接受string类型");
-            }
-        }
-        private object GetTableMember(CodeMember member)
-        {
-            if (member.Type == MEMBER_TYPE.NUMBER) {
-                return member.MemberNumberObject;
-            } else if (member.Type == MEMBER_TYPE.STRING) {
-                return member.MemberString;
-            } else {
-                ScriptObject mem = ResolveOperand(member.Member);
-                if (!(mem is ScriptString || mem is ScriptNumber)) throw new ExecutionException("Table Element 错误的类型:" + mem.Type);
-                return mem.ObjectValue;
-            }
-        }
-        private string GetUserdataMember(CodeMember member)
+        private object GetMember(CodeMember member)
         {
             if (member.Type == MEMBER_TYPE.STRING) {
                 return member.MemberString;
-            } else if (member.Type == MEMBER_TYPE.OBJECT) {
-                ScriptObject mem = ResolveOperand(member.Member);
-                if (!(mem is ScriptString)) throw new ExecutionException("Userdata Element 错误的类型:" + mem.Type);
-                return ((ScriptString)mem).Value;
+            } else if (member.Type == MEMBER_TYPE.INDEX) {
+                return member.MemberIndex;
+            } else if (member.Type == MEMBER_TYPE.NUMBER) {
+                return member.MemberNumber;
             } else {
-                throw new ExecutionException("Userdata Element 不接受number类型");
+                return ResolveOperand(member.MemberObject).ObjectValue ;
             }
         }
         private ScriptObject GetVariable(CodeMember member)
@@ -126,16 +94,7 @@ namespace Scorpio.Runtime
                 ScriptObject obj = GetVariableObject(name);
                 ret = (obj == null ? m_script.GetValue(name) : obj);
             } else {
-                ScriptObject parent = ResolveOperand(member.Parent);
-                if (parent is ScriptArray) {
-                    ret = parent.GetValue(GetArrayMember(member));
-                } else if (parent is ScriptTable) {
-                    ret = parent.GetValue(GetTableMember(member));
-                } else if (parent is ScriptUserdata) {
-                    ret = parent.GetValue(GetUserdataMember(member));
-                } else {
-                    throw new ExecutionException("Member Parent 错误的类型:" + parent.Type);
-                }
+                ret = ResolveOperand(member.Parent).GetValueInternal(GetMember(member));
             }
             if (ret == null) throw new ExecutionException("GetVariable member is error");
             if (member.Calc != CALC.NONE) {
@@ -152,16 +111,7 @@ namespace Scorpio.Runtime
                 if (!SetVariableObject(name, variable))
                     m_script.SetObjectInternal(name, variable);
             } else {
-                ScriptObject parent = ResolveOperand(member.Parent);
-                if (parent is ScriptArray) {
-                    parent.SetValue(GetArrayMember(member), variable);
-                } else if (parent is ScriptTable) {
-                    parent.SetValue(GetTableMember(member), variable);
-                } else if (parent is ScriptUserdata) {
-                    parent.SetValue(GetUserdataMember(member), variable);
-                } else {
-                    throw new ExecutionException("Member Parent 错误的类型:" + parent.Type);
-                }
+                ResolveOperand(member.Parent).SetValueInternal(GetMember(member), variable);
             }
         }
         private void Reset()
@@ -301,7 +251,7 @@ namespace Scorpio.Runtime
             ScriptObject obj;
             for ( ; ; )
             {
-                obj = ((ScriptFunction)loop).Call();
+                obj = m_script.CreateObject(((ScriptFunction)loop).Call());
                 if (obj == null || obj is ScriptNull) return;
                 code.Context.Initialize(this, code.Identifier, obj);
                 code.Context.Execute();
@@ -402,7 +352,7 @@ namespace Scorpio.Runtime
         }
         void ProcessCallFunction()
         {
-            ParseCall((CodeCallFunction)m_scriptInstruction.Operand0);
+            ParseCall((CodeCallFunction)m_scriptInstruction.Operand0, false);
         }
         private void InvokeReturnValue(ScriptObject value)
         {
@@ -438,7 +388,7 @@ namespace Scorpio.Runtime
             } else if (value is CodeFunction) {
                 return ParseFunction((CodeFunction)value);
             } else if (value is CodeCallFunction) {
-                return ParseCall(value as CodeCallFunction);
+                return ParseCall(value as CodeCallFunction, true);
             } else if (value is CodeMember) {
                 return GetVariable(value as CodeMember);
             } else if (value is CodeArray) {
@@ -480,7 +430,7 @@ namespace Scorpio.Runtime
             func.Func.SetParentContext(this);
             return func.Func;
         }
-        ScriptObject ParseCall(CodeCallFunction scriptFunction)
+        ScriptObject ParseCall(CodeCallFunction scriptFunction, bool needRet)
         {
             ScriptObject obj = ResolveOperand(scriptFunction.Member);
             int num = scriptFunction.Parameters.Count;
@@ -489,7 +439,8 @@ namespace Scorpio.Runtime
                 parameters[i] = ResolveOperand(scriptFunction.Parameters[i]);
             }
             m_script.PushStackInfo();
-            return obj.Call(parameters);
+            object ret = obj.Call(parameters);
+            return needRet ? m_script.CreateObject(ret) : null;
         }
         ScriptArray ParseArray(CodeArray array)
         {
@@ -521,39 +472,31 @@ namespace Scorpio.Runtime
                 if (left is ScriptString || right is ScriptString) {
                     return m_script.CreateString(left.ToString() + right.ToString());
                 } else if (left is ScriptNumber && right is ScriptNumber){
-                    return (left as ScriptNumber).ComputePlus(right as ScriptNumber);
+                    return (left as ScriptNumber).Compute(TokenType.Plus, right as ScriptNumber);
                 } else {
                     throw new ExecutionException("operate [+] left right is not same type");
                 }
-            } else if (type == TokenType.Minus || type == TokenType.Multiply || type == TokenType.Divide || type == TokenType.Modulo) {
+            } else if (type == TokenType.Minus || type == TokenType.Multiply || type == TokenType.Divide || type == TokenType.Modulo ||
+                type == TokenType.InclusiveOr || type == TokenType.Combine || type == TokenType.XOR || type == TokenType.Shr || type == TokenType.Shi) {
                 ScriptNumber leftNumber = left as ScriptNumber;
-                if (leftNumber == null) throw new ExecutionException("operate [+ - * /] left is not number");
+                if (leftNumber == null) throw new ExecutionException("运算符[左边]必须是number类型");
                 ScriptNumber rightNumber = ResolveOperand(operate.Right) as ScriptNumber;
-                if (rightNumber == null) throw new ExecutionException("operate [+ - * /] right is not number");
-                if (operate.Operator == TokenType.Minus)
-                    return leftNumber.ComputeMinus(rightNumber);
-                else if (operate.Operator == TokenType.Multiply)
-                    return leftNumber.ComputeMultiply(rightNumber);
-                else if (operate.Operator == TokenType.Divide)
-                    return leftNumber.ComputeDivide(rightNumber);
-                else if (operate.Operator == TokenType.Modulo)
-                    return leftNumber.ComputeModulo(rightNumber);
+                if (rightNumber == null) throw new ExecutionException("运算符[右边]必须是number类型");
+                return leftNumber.Compute(type, rightNumber);
             } else {
                 if (left is ScriptBoolean) {
+                    bool b1 = ((ScriptBoolean)left).Value;
                     if (type == TokenType.And) {
-                        bool b1 = ((ScriptBoolean)left).Value;
                         if (b1 == false) return ScriptBoolean.False;
                         ScriptBoolean right = ResolveOperand(operate.Right) as ScriptBoolean;
                         if (right == null) throw new ExecutionException("operate [&&] right is not a bool");
                         return right.Value ? ScriptBoolean.True : ScriptBoolean.False;
                     } else if (type == TokenType.Or) {
-                        bool b1 = ((ScriptBoolean)left).Value;
                         if (b1 == true) return ScriptBoolean.True;
                         ScriptBoolean right = ResolveOperand(operate.Right) as ScriptBoolean;
                         if (right == null) throw new ExecutionException("operate [||] right is not a bool");
                         return right.Value ? ScriptBoolean.True : ScriptBoolean.False;
                     } else {
-                        bool b1 = ((ScriptBoolean)left).Value;
                         ScriptBoolean right = ResolveOperand(operate.Right) as ScriptBoolean;
                         if (right == null) throw new ExecutionException("operate [==] [!=] right is not a bool");
                         bool b2 = right.Value;
@@ -584,22 +527,9 @@ namespace Scorpio.Runtime
                     if (left.Type != right.Type)
                         throw new ExecutionException("[operate] left right is not same type");
                     if (left is ScriptString) {
-                        string str1 = ((ScriptString)left).Value;
-                        string str2 = ((ScriptString)right).Value;
-                        bool ret = false;
-                        if (type == TokenType.Greater)
-                            ret = string.Compare(str1, str2) < 0;
-                        else if (type == TokenType.GreaterOrEqual)
-                            ret = string.Compare(str1, str2) <= 0;
-                        else if (type == TokenType.Less)
-                            ret = string.Compare(str1, str2) > 0;
-                        else if (type == TokenType.LessOrEqual)
-                            ret = string.Compare(str1, str2) >= 0;
-                        else
-                            throw new ExecutionException("nonsupport operate [" + type + "] with string");
-                        return ret ? ScriptBoolean.True : ScriptBoolean.False;
+                        return ((ScriptString)left).Compare(type, (ScriptString)right) ? ScriptBoolean.True : ScriptBoolean.False;
                     } else if (left is ScriptNumber) {
-                        return ((ScriptNumber)left).Compare(type, operate, (ScriptNumber)right) ? ScriptBoolean.True : ScriptBoolean.False;
+                        return ((ScriptNumber)left).Compare(type, (ScriptNumber)right) ? ScriptBoolean.True : ScriptBoolean.False;
                     } else {
                         throw new ExecutionException("nonsupport operate [" + type + "] with " + left.Type);
                     }
@@ -635,19 +565,7 @@ namespace Scorpio.Runtime
                     ScriptNumber right = ResolveOperand(assign.value) as ScriptNumber;
                     if (right == null)
                         throw new ExecutionException("[+= -=...]值只能为 number类型");
-                    switch (assign.AssignType)
-                    {
-                        case TokenType.AssignPlus:
-                            return num.AssignPlus(right);
-                        case TokenType.AssignMinus:
-                            return num.AssignMinus(right);
-                        case TokenType.AssignMultiply:
-                            return num.AssignMultiply(right);
-                        case TokenType.AssignDivide:
-                            return num.AssignDivide(right);
-                        case TokenType.AssignModulo:
-                            return num.AssignModulo(right);
-                    }
+                    return num.AssignCompute(assign.AssignType, right);
                 }
                 throw new ExecutionException("[+= -=...]左边值只能为number或者string");
             }

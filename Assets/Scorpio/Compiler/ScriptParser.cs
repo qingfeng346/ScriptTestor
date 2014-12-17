@@ -73,21 +73,7 @@ namespace Scorpio.Compiler
             switch (token.Type)
             {
                 case TokenType.Var:
-                    {
-                        string str = ReadIdentifier();
-                        m_scriptExecutable.AddScriptInstruction(new ScriptInstruction(Opcode.VAR, str));
-                        Token peek = PeekToken();
-                        if (peek.Type == TokenType.Assign) {
-                            UndoToken();
-                            ParseStatement();
-                        } else if (peek.Type == TokenType.Comma) {
-                            while (PeekToken().Type == TokenType.Comma)
-                            {
-                                ReadToken();
-                                m_scriptExecutable.AddScriptInstruction(new ScriptInstruction(Opcode.VAR, ReadIdentifier()));
-                            }
-                        }
-                    }
+                    ParseVar();
                     break;
                 case TokenType.LeftBrace:
                     ParseBlock();
@@ -114,21 +100,12 @@ namespace Scorpio.Compiler
                     ParseThrow();
                     break;
                 case TokenType.Return:
-                    {
-                        Token peek = PeekToken();
-                        if (peek.Type == TokenType.RightBrace ||
-                            peek.Type == TokenType.SemiColon ||
-                            peek.Type == TokenType.Finished)
-                            m_scriptExecutable.AddScriptInstruction(new ScriptInstruction(Opcode.RET, new CodeScriptObject(m_script, null)));
-                        else
-                            m_scriptExecutable.AddScriptInstruction(new ScriptInstruction(Opcode.RET, GetObject()));
-                    }
+                    ParseReturn();
                     break;
                 case TokenType.Identifier:
                 case TokenType.Increment:
                 case TokenType.Decrement:
                 case TokenType.Eval:
-                    UndoToken();
                     ParseExpression();
                     break;
                 case TokenType.Break:
@@ -190,6 +167,23 @@ namespace Scorpio.Compiler
             ReadRightParenthesis();
             ScriptExecutable executable = ParseStatementBlock(Executable_Block.Function);
             return m_script.CreateFunction(strFunctionName, new ScorpioScriptFunction(m_script, listParameters, executable, bParams));
+        }
+        //解析Var关键字
+        private void ParseVar()
+        {
+            for (; ; ) {
+                m_scriptExecutable.AddScriptInstruction(new ScriptInstruction(Opcode.VAR, ReadIdentifier()));
+                Token peek = PeekToken();
+                if (peek.Type == TokenType.Assign) {
+                    UndoToken();
+                    ParseStatement();
+                }
+                peek = ReadToken();
+                if (peek.Type != TokenType.Comma) {
+                    UndoToken();
+                    break;
+                }
+            }
         }
         //解析普通代码块 {}
         private void ParseBlock()
@@ -389,9 +383,21 @@ namespace Scorpio.Compiler
             ret.obj = GetObject();
             m_scriptExecutable.AddScriptInstruction(new ScriptInstruction(Opcode.THROW, ret));
         }
+        //解析return
+        private void ParseReturn()
+        {
+            Token peek = PeekToken();
+            if (peek.Type == TokenType.RightBrace ||
+                peek.Type == TokenType.SemiColon ||
+                peek.Type == TokenType.Finished)
+                m_scriptExecutable.AddScriptInstruction(new ScriptInstruction(Opcode.RET, new CodeScriptObject(m_script, null)));
+            else
+                m_scriptExecutable.AddScriptInstruction(new ScriptInstruction(Opcode.RET, GetObject()));
+        }
         //解析表达式
         private void ParseExpression()
         {
+            UndoToken();
             Token peek = PeekToken();
             CodeObject member = GetObject();
             if (member is CodeCallFunction) {
@@ -441,6 +447,11 @@ namespace Scorpio.Compiler
                         case TokenType.AssignMultiply:
                         case TokenType.AssignDivide:
                         case TokenType.AssignModulo:
+                        case TokenType.AssignCombine:
+                        case TokenType.AssignInclusiveOr:
+                        case TokenType.AssignXOR:
+                        case TokenType.AssignShr:
+                        case TokenType.AssignShi:
                             return new CodeAssign(member, GetObject(), token.Type, m_strBreviary, token.SourceLine);
                         default:
                             UndoToken();
@@ -651,7 +662,10 @@ namespace Scorpio.Compiler
                 if (token.Type == TokenType.Identifier || token.Type == TokenType.String || token.Type == TokenType.Number) {
                     Token next = ReadToken();
                     if (next.Type == TokenType.Assign || next.Type == TokenType.Colon) {
-                        ret.Variables.Add(new TableVariable(token.Lexeme, GetObject()));
+                        if (token.Lexeme is double)
+                            ret.Variables.Add(new TableVariable(Util.ToInt32(token.Lexeme), GetObject()));
+                        else
+                            ret.Variables.Add(new TableVariable(token.Lexeme, GetObject()));
                         Token peek = PeekToken();
                         if (peek.Type == TokenType.Comma || peek.Type == TokenType.SemiColon) {
                             ReadToken();

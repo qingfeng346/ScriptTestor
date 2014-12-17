@@ -112,10 +112,10 @@ namespace Scorpio.Compiler
                                 lexState = LexState.AssignOrEqual;
                                 break;
                             case '&':
-                                lexState = LexState.And;
+                                lexState = LexState.AndOrCombine;
                                 break;
                             case '|':
-                                lexState = LexState.Or;
+                                lexState = LexState.OrOrInclusiveOr;
                                 break;
                             case '!':
                                 lexState = LexState.NotOrNotEqual;
@@ -126,16 +126,25 @@ namespace Scorpio.Compiler
                             case '<':
                                 lexState = LexState.LessOrLessEqual;
                                 break;
+                            case '^':
+                                lexState = LexState.XorOrAssignXor;
+                                break;
                             case '@':
                                 lexState = LexState.SimpleStringStart;
                                 break;
                             case '\"':
                                 lexState = LexState.String;
                                 break;
+                            case '\'':
+                                lexState = LexState.SingleString;
+                                break;
                             default:
                                 if (ch == '_' || char.IsLetter(ch)) {
                                     lexState = LexState.Identifier;
                                     m_strToken = "" + ch;
+                                } else if (ch == '0') {
+                                    lexState = LexState.NumberOrHexNumber;
+                                    m_strToken = "";
                                 } else if (char.IsDigit(ch)) {
                                     lexState = LexState.Number;
                                     m_strToken = "" + ch;
@@ -235,31 +244,39 @@ namespace Scorpio.Compiler
                             UndoChar();
                         }
                         break;
-                    case LexState.And:
+                    case LexState.AndOrCombine:
                         if (ch == '&') {
                             AddToken(TokenType.And, "&&");
+                        } else if (ch == '=') {
+                            AddToken(TokenType.AssignCombine, "&=");
                         } else {
-                            ThrowInvalidCharacterException(ch);
+                            AddToken(TokenType.Combine, "&");
+                            UndoChar();
                         }
                         break;
-                    case LexState.Or:
+                    case LexState.OrOrInclusiveOr:
                         if (ch == '|') {
                             AddToken(TokenType.Or, "||");
+                        } else if (ch == '=') {
+                            AddToken(TokenType.AssignInclusiveOr, "|=");
                         } else {
-                            ThrowInvalidCharacterException(ch);
+                            AddToken(TokenType.InclusiveOr, "|");
+                            UndoChar();
                         }
                         break;
-                    case LexState.NotOrNotEqual:
+                    case LexState.XorOrAssignXor:
                         if (ch == '=') {
-                            AddToken(TokenType.NotEqual, "!=");
+                            AddToken(TokenType.AssignXOR, "^=");
                         } else {
-                            AddToken(TokenType.Not, "!");
+                            AddToken(TokenType.XOR, "^");
                             UndoChar();
                         }
                         break;
                     case LexState.GreaterOrGreaterEqual:
                         if (ch == '=') {
                             AddToken(TokenType.GreaterOrEqual, ">=");
+                        } else if (ch == '>') {
+                            lexState = LexState.ShrOrAssignShr;
                         } else {
                             AddToken(TokenType.Greater, ">");
                             UndoChar();
@@ -268,8 +285,34 @@ namespace Scorpio.Compiler
                     case LexState.LessOrLessEqual:
                         if (ch == '=') {
                             AddToken(TokenType.LessOrEqual, "<=");
+                        } else if (ch == '<') {
+                            lexState = LexState.ShiOrAssignShi;
                         } else {
                             AddToken(TokenType.Less, "<");
+                            UndoChar();
+                        }
+                        break;
+                    case LexState.ShrOrAssignShr:
+                        if (ch == '=') {
+                            AddToken(TokenType.AssignShr, ">>=");
+                        } else {
+                            AddToken(TokenType.Shr, ">>");
+                            UndoChar();
+                        }
+                        break;
+                    case LexState.ShiOrAssignShi:
+                        if (ch == '=') {
+                            AddToken(TokenType.AssignShi, "<<=");
+                        } else {
+                            AddToken(TokenType.Shi, "<<");
+                            UndoChar();
+                        }
+                        break;
+                    case LexState.NotOrNotEqual:
+                        if (ch == '=') {
+                            AddToken(TokenType.NotEqual, "!=");
+                        } else {
+                            AddToken(TokenType.Not, "!");
                             UndoChar();
                         }
                         break;
@@ -284,9 +327,56 @@ namespace Scorpio.Compiler
                             m_strToken += ch;
                         }
                         break;
+                    case LexState.StringEscape:
+                        if (ch == '\\' || ch == '\"') {
+                            m_strToken += ch;
+                            lexState = LexState.String;
+                        } else if (ch == 't') {
+                            m_strToken += '\t';
+                            lexState = LexState.String;
+                        } else if (ch == 'r') {
+                            m_strToken += '\r';
+                            lexState = LexState.String;
+                        } else if (ch == 'n') {
+                            m_strToken += '\n';
+                            lexState = LexState.String;
+                        } else {
+                            ThrowInvalidCharacterException(ch);
+                        }
+                        break;
+                    case LexState.SingleString:
+                        if (ch == '\'') {
+                            AddToken(TokenType.String, m_strToken);
+                        } else if (ch == '\\') {
+                            lexState = LexState.SingleStringEscape;
+                        } else if (ch == '\r' || ch == '\n') {
+                            ThrowInvalidCharacterException(ch);
+                        } else {
+                            m_strToken += ch;
+                        }
+                        break;
+                    case LexState.SingleStringEscape:
+                        if (ch == '\\' || ch == '\'') {
+                            m_strToken += ch;
+                            lexState = LexState.SingleString;
+                        } else if (ch == 't') {
+                            m_strToken += '\t';
+                            lexState = LexState.SingleString;
+                        } else if (ch == 'r') {
+                            m_strToken += '\r';
+                            lexState = LexState.SingleString;
+                        } else if (ch == 'n') {
+                            m_strToken += '\n';
+                            lexState = LexState.SingleString;
+                        } else {
+                            ThrowInvalidCharacterException(ch);
+                        }
+                        break;
                     case LexState.SimpleStringStart:
                         if (ch == '\"') {
                             lexState = LexState.SimpleString;
+                        } else if (ch == '\'') {
+                            lexState = LexState.SingleSimpleString;
                         } else {
                             ThrowInvalidCharacterException(ch);
                         }
@@ -307,21 +397,29 @@ namespace Scorpio.Compiler
                             UndoChar();
                         }
                         break;
-                    case LexState.StringEscape:
-                        if (ch == '\\' || ch == '\"') {
-                            m_strToken += ch;
-                            lexState = LexState.String;
-                        } else if (ch == 't') {
-                            m_strToken += '\t';
-                            lexState = LexState.String;
-                        } else if (ch == 'r') {
-                            m_strToken += '\r';
-                            lexState = LexState.String;
-                        } else if (ch == 'n') {
-                            m_strToken += '\n';
-                            lexState = LexState.String;
+                    case LexState.SingleSimpleString:
+                        if (ch == '\'') {
+                            lexState = LexState.SingleSimpleStringQuotationMarkOrOver;
                         } else {
-                            ThrowInvalidCharacterException(ch);
+                            m_strToken += ch;
+                        }
+                        break;
+                    case LexState.SingleSimpleStringQuotationMarkOrOver:
+                        if (ch == '\'') {
+                            m_strToken += '\'';
+                            lexState = LexState.SingleSimpleString;
+                        } else {
+                            AddToken(TokenType.String, m_strToken);
+                            UndoChar();
+                        }
+                        break;
+                    case LexState.NumberOrHexNumber:
+                        if (ch == 'x') {
+                            lexState = LexState.HexNumber;
+                        } else {
+                            m_strToken = "0";
+                            lexState = LexState.Number;
+                            UndoChar();
                         }
                         break;
                     case LexState.Number:
@@ -336,6 +434,17 @@ namespace Scorpio.Compiler
                             UndoChar();
                         }
                         break;
+                    case LexState.HexNumber:
+                        if (IsHexDigit(ch)) {
+                            m_strToken += ch;
+                        } else {
+                            if (Util.IsNullOrEmpty(m_strToken))
+                                ThrowInvalidCharacterException(ch);
+                            long value = long.Parse(m_strToken, System.Globalization.NumberStyles.HexNumber);
+                            AddToken(TokenType.Number, value);
+                            UndoChar();
+                        }
+                        break;
                     case LexState.Identifier:
                         if (ch == '_' || char.IsLetterOrDigit(ch)) {
                             m_strToken += ch;
@@ -343,17 +452,8 @@ namespace Scorpio.Compiler
                             TokenType tokenType;
                             switch (m_strToken)
                             {
-                                case "require":
-                                case "include":
-                                case "import":
-                                case "using":
-                                    tokenType = TokenType.Require;
-                                    break;
                                 case "eval":
                                     tokenType = TokenType.Eval;
-                                    break;
-                                case "global":
-                                    tokenType = TokenType.Global;
                                     break;
                                 case "var":
                                 case "local":

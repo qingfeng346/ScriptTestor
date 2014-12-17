@@ -4,6 +4,7 @@ using System.Text;
 using System.Reflection;
 using Scorpio;
 using Scorpio.Exception;
+using Scorpio.Variable;
 namespace Scorpio.Library
 {
     public class LibraryBasis
@@ -143,10 +144,16 @@ namespace Scorpio.Library
             script.SetObjectInternal("tolong", script.CreateFunction(new tolong(script)));
             script.SetObjectInternal("tostring", script.CreateFunction(new tostring(script)));
             script.SetObjectInternal("clone", script.CreateFunction(new clone()));
+            script.SetObjectInternal("require", script.CreateFunction(new require(script)));
+            script.SetObjectInternal("import", script.CreateFunction(new require(script)));
+            script.SetObjectInternal("using", script.CreateFunction(new require(script)));
+
             script.SetObjectInternal("load_assembly", script.CreateFunction(new load_assembly(script)));
             script.SetObjectInternal("load_assembly_safe", script.CreateFunction(new load_assembly_safe(script)));
             script.SetObjectInternal("push_assembly", script.CreateFunction(new push_assembly(script)));
             script.SetObjectInternal("import_type", script.CreateFunction(new import_type(script)));
+            script.SetObjectInternal("generic_type", script.CreateFunction(new generic_type(script)));
+            script.SetObjectInternal("generic_method", script.CreateFunction(new generic_method(script)));
         }
         private class print : ScorpioHandle
         {
@@ -283,6 +290,20 @@ namespace Scorpio.Library
                 return args[0].Clone();
             }
         }
+        private class require : ScorpioHandle
+        {
+            private Script m_script;
+            public require(Script script)
+            {
+                m_script = script;
+            }
+            public object Call(ScriptObject[] args)
+            {
+                ScriptString str = args[0] as ScriptString;
+                Util.Assert(str != null, "require 参数必须是 string");
+                return m_script.LoadFile(m_script.GetValue("searchpath") + "/" + str.Value);
+            }
+        }
         private class load_assembly : ScorpioHandle
         {
             private Script m_script;
@@ -342,6 +363,46 @@ namespace Scorpio.Library
                 ScriptString str = args[0] as ScriptString;
                 if (str == null) throw new ExecutionException("import_type 参数必须是 string");
                 return m_script.LoadType(str.Value);
+            }
+        }
+        private class generic_type : ScorpioHandle
+        {
+            private Script m_script;
+            public generic_type(Script script)
+            {
+                m_script = script;
+            }
+            public object Call(ScriptObject[] args)
+            {
+                ScriptUserdata userdata = args[0] as ScriptUserdata;
+                if (userdata == null) throw new ExecutionException("generic_type 参数必须是 userdata");
+                Type[] types = new Type[args.Length - 1];
+                for (int i = 1; i < args.Length; ++i)
+                {
+                    ScriptUserdata type = args[i] as ScriptUserdata;
+                    if (userdata == null) throw new ExecutionException("generic_type 参数必须是 userdata");
+                    types[i - 1] = type.ValueType;
+                }
+                return userdata.ValueType.MakeGenericType(types);
+            }
+        }
+        private class generic_method : ScorpioHandle
+        {
+            private Script m_script;
+            public generic_method(Script script)
+            {
+                m_script = script;
+            }
+            public object Call(ScriptObject[] args)
+            {
+                if (args.Length < 2) throw new ExecutionException("generic_method 参数必须大于等于2个");
+                ScriptFunction func = args[0] as ScriptFunction;
+                if (func == null) throw new ExecutionException("generic_method 参数必须是 function");
+                ScorpioMethod method = func.Method;
+                if (func == null) throw new ExecutionException("generic_method 参数必须是 程序函数");
+                ScriptObject[] pars = new ScriptObject[args.Length - 1];
+                Array.Copy(args, 1, pars, 0, pars.Length);
+                return method.MakeGenericMethod(pars);
             }
         }
     }

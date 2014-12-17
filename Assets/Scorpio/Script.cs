@@ -15,7 +15,7 @@ namespace Scorpio
     public class Script
     {
         public const string DynamicDelegateName = "__DynamicDelegate__";
-        public const string Version = "0.0.6beta";
+        public const string Version = "master";
         public const BindingFlags BindingFlag = BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.FlattenHierarchy;
         private const string GLOBAL_TABLE = "_G";               //全局table
         private const string GLOBAL_VERSION = "_VERSION";       //版本号
@@ -23,7 +23,6 @@ namespace Scorpio
         private ScriptTable m_GlobalTable;                                      //全局Table
         private List<StackInfo> m_StackInfoStack = new List<StackInfo>();       //堆栈数据
         private List<Assembly> m_Assembly = new List<Assembly>();               //所有代码集合
-        private Dictionary<Type, UserdataType> m_Types = new Dictionary<Type, UserdataType>();    //所有的类集合
         private StackInfo m_StackInfo = new StackInfo();                        //最近堆栈数据
         public ScriptObject LoadFile(String strFileName)
         {
@@ -98,6 +97,10 @@ namespace Scorpio
             }
             return builder.ToString();
         }
+        public ScriptTable GetGlobalTable()
+        {
+            return m_GlobalTable;
+        }
         public bool HasValue(String key)
         {
             return m_GlobalTable.HasValue(key);
@@ -114,7 +117,7 @@ namespace Scorpio
         {
             m_GlobalTable.SetValue(key, value);
         }
-        public ScriptObject Call(String strName, params object[] args)
+        public object Call(String strName, params object[] args)
         {
             ScriptObject obj = m_GlobalTable.GetValue(strName);
             if (obj is ScriptNull) throw new ScriptException("找不到变量[" + strName + "]");
@@ -176,11 +179,11 @@ namespace Scorpio
         {
             return m_UserdataFactory.create(this, value);
         }
-        internal ScriptArray CreateArray()
+        public ScriptArray CreateArray()
         {
             return new ScriptArray(this);
         }
-        internal ScriptTable CreateTable()
+        public ScriptTable CreateTable()
         {
             return new ScriptTable(this);
         }
@@ -200,17 +203,9 @@ namespace Scorpio
         {
             return new ScriptFunction(this, value);
         }
-        internal UserdataType GetScorpioType(Type type)
-        {
-            if (m_Types.ContainsKey(type))
-                return m_Types[type];
-            UserdataType scorpioType = new UserdataType(this, type);
-            m_Types.Add(type, scorpioType);
-            return scorpioType;
-        }
         public void LoadLibrary()
         {
-            m_UserdataFactory = new DefaultScriptUserdataFactory();
+            m_UserdataFactory = new DefaultScriptUserdataFactory(this);
             m_GlobalTable = CreateTable();
             m_GlobalTable.SetValue(GLOBAL_TABLE, m_GlobalTable);
             m_GlobalTable.SetValue(GLOBAL_VERSION, CreateString(Version));
@@ -220,6 +215,7 @@ namespace Scorpio
             LibraryArray.Load(this);
             LibraryString.Load(this);
             LibraryTable.Load(this);
+            LibraryJson.Load(this);
         }
     }
 }
