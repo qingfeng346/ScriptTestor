@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using Scorpio;
 using Scorpio.Runtime;
 namespace Scorpio.CodeDom
 {
@@ -9,6 +7,6 @@ namespace Scorpio.CodeDom
     {
         public string Identifier;
         public CodeObject LoopObject;
-        public ScriptContext Context;
+        public ScriptExecutable BlockExecutable;            //for内容
     }
 }

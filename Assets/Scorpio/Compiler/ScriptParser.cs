@@ -10,7 +10,7 @@ using Scorpio.Variable;
 namespace Scorpio.Compiler
 {
     //上下文解析
-    internal partial class ScriptParser
+    public partial class ScriptParser
     {
         private Script m_script;                                                        //脚本类
         private string m_strBreviary;                                                   //当前解析的脚本摘要
@@ -27,13 +27,17 @@ namespace Scorpio.Compiler
         }
         public void BeginExecutable(Executable_Block block)
         {
-            m_scriptExecutable = new ScriptExecutable(m_script, block);
+            m_scriptExecutable = new ScriptExecutable();
             m_Executables.Push(m_scriptExecutable);
         }
         public void EndExecutable()
         {
             m_Executables.Pop();
             m_scriptExecutable = (m_Executables.Count > 0) ? m_Executables.Peek() : null;
+        }
+        private int GetSourceLine()
+        {
+            return PeekToken().SourceLine;
         }
         //解析脚本
         public ScriptExecutable Parse()
@@ -50,16 +54,18 @@ namespace Scorpio.Compiler
         private ScriptExecutable ParseStatementBlock(Executable_Block block, bool readLeftBrace, TokenType finished)
         {
             BeginExecutable(block);
-            if (readLeftBrace) ReadLeftBrace();
-            TokenType tokenType;
-            while (HasMoreTokens())
-            {
-                tokenType = ReadToken().Type;
-                if (tokenType == finished) {
-                    break;
-                }
-                UndoToken();
+            if (readLeftBrace && PeekToken().Type != TokenType.LeftBrace) {
                 ParseStatement();
+            } else {
+                if (readLeftBrace) ReadLeftBrace();
+                TokenType tokenType;
+                while (HasMoreTokens()) {
+                    tokenType = ReadToken().Type;
+                    if (tokenType == finished)
+                        break;
+                    UndoToken();
+                    ParseStatement();
+                }
             }
             ScriptExecutable ret = m_scriptExecutable;
             ret.EndScriptInstruction();
@@ -126,12 +132,10 @@ namespace Scorpio.Compiler
         //解析函数（全局函数或类函数）
         private void ParseFunction()
         {
-            if (m_scriptExecutable.Block == Executable_Block.Context)
-            {
-                UndoToken();
-                ScriptFunction func = ParseFunctionDeclaration(true);
-                m_scriptExecutable.AddScriptInstruction(new ScriptInstruction(Opcode.MOV, new CodeMember(func.Name), new CodeFunction(func)));
-            }
+            Token token = PeekToken();
+            UndoToken();
+            ScriptFunction func = ParseFunctionDeclaration(true);
+            m_scriptExecutable.AddScriptInstruction(new ScriptInstruction(Opcode.MOV, new CodeMember(func.Name), new CodeFunction(func, m_strBreviary, token.SourceLine)));
         }
         //解析函数（返回一个函数）
         private ScriptFunction ParseFunctionDeclaration(bool needName)
@@ -172,16 +176,27 @@ namespace Scorpio.Compiler
         private void ParseVar()
         {
             for (; ; ) {
-                m_scriptExecutable.AddScriptInstruction(new ScriptInstruction(Opcode.VAR, ReadIdentifier()));
                 Token peek = PeekToken();
-                if (peek.Type == TokenType.Assign) {
-                    UndoToken();
-                    ParseStatement();
+                if (peek.Type == TokenType.Function) {
+                    ScriptFunction func = ParseFunctionDeclaration(true);
+                    m_scriptExecutable.AddScriptInstruction(new ScriptInstruction(Opcode.VAR, func.Name));
+                    m_scriptExecutable.AddScriptInstruction(new ScriptInstruction(Opcode.MOV, new CodeMember(func.Name), new CodeFunction(func, m_strBreviary, peek.SourceLine)));
+                } else {
+                    m_scriptExecutable.AddScriptInstruction(new ScriptInstruction(Opcode.VAR, ReadIdentifier()));
+                    peek = PeekToken();
+                    if (peek.Type == TokenType.Assign) {
+                        UndoToken();
+                        ParseStatement();
+                    }
                 }
                 peek = ReadToken();
                 if (peek.Type != TokenType.Comma) {
                     UndoToken();
                     break;
+                }
+                peek = PeekToken();
+                if (peek.Type == TokenType.Var) {
+                    ReadToken();
                 }
             }
         }
@@ -189,22 +204,23 @@ namespace Scorpio.Compiler
         private void ParseBlock()
         {
             UndoToken();
-            m_scriptExecutable.AddScriptInstruction(new ScriptInstruction(Opcode.CALL_BLOCK, new ScriptContext(m_script, ParseStatementBlock(Executable_Block.Block))));
+            m_scriptExecutable.AddScriptInstruction(new ScriptInstruction(Opcode.CALL_BLOCK, new CodeCallBlock(ParseStatementBlock(Executable_Block.Block))));
         }
         //解析if(判断语句)
         private void ParseIf()
         {
             CodeIf ret = new CodeIf();
             ret.If = ParseCondition(true, Executable_Block.If);
+            List<TempCondition> ElseIf = new List<TempCondition>();
             for (; ; )
             {
                 Token token = ReadToken();
                 if (token.Type == TokenType.ElseIf) {
-                    ret.AddElseIf(ParseCondition(true, Executable_Block.If));
+                    ElseIf.Add(ParseCondition(true, Executable_Block.If));
                 } else if (token.Type == TokenType.Else) {
                     if (PeekToken().Type == TokenType.If) {
                         ReadToken();
-                        ret.AddElseIf(ParseCondition(true, Executable_Block.If));
+                        ElseIf.Add(ParseCondition(true, Executable_Block.If));
                     } else {
                         UndoToken();
                         break;
@@ -219,36 +235,34 @@ namespace Scorpio.Compiler
                 ReadToken();
                 ret.Else = ParseCondition(false, Executable_Block.If);
             }
+            ret.Init(ElseIf);
             m_scriptExecutable.AddScriptInstruction(new ScriptInstruction(Opcode.CALL_IF, ret));
         }
         //解析判断内容
         private TempCondition ParseCondition(bool condition, Executable_Block block)
         {
             CodeObject con = null;
-            if (condition)
-            {
+            if (condition) {
                 ReadLeftParenthesis();
                 con = GetObject();
                 ReadRightParenthesis();
             }
-            return new TempCondition(m_script, con, ParseStatementBlock(block), block);
+            return new TempCondition(con, ParseStatementBlock(block), block);
         }
         //解析for语句
         private void ParseFor()
         {
             ReadLeftParenthesis();
             int partIndex = m_iNextToken;
-            Token token = ReadToken();
-            if (token.Type == TokenType.Identifier)
-            {
+			if (PeekToken ().Type == TokenType.Var) ReadToken ();
+			Token identifier = ReadToken();
+			if (identifier.Type == TokenType.Identifier) {
                 Token assign = ReadToken();
-                if (assign.Type == TokenType.Assign)
-                {
+                if (assign.Type == TokenType.Assign) {
                     CodeObject obj = GetObject();
                     Token comma = ReadToken();
-                    if (comma.Type == TokenType.Comma)
-                    {
-                        ParseFor_Simple((string)token.Lexeme, obj);
+                    if (comma.Type == TokenType.Comma) {
+						ParseFor_Simple((string)identifier.Lexeme, obj);
                         return;
                     }
                 }
@@ -259,7 +273,7 @@ namespace Scorpio.Compiler
         //解析单纯for循环
         private void ParseFor_Simple(string Identifier, CodeObject obj)
         {
-            CodeForSimple ret = new CodeForSimple(m_script);
+            CodeForSimple ret = new CodeForSimple();
             ret.Identifier = Identifier;
             ret.Begin = obj;
             ret.Finished = GetObject();
@@ -269,13 +283,13 @@ namespace Scorpio.Compiler
                 ret.Step = GetObject();
             }
             ReadRightParenthesis();
-            ret.SetContextExecutable(ParseStatementBlock(Executable_Block.For));
+            ret.BlockExecutable = ParseStatementBlock(Executable_Block.For);
             m_scriptExecutable.AddScriptInstruction(new ScriptInstruction(Opcode.CALL_FORSIMPLE, ret));
         }
         //解析正规for循环
         private void ParseFor_impl()
         {
-            CodeFor ret = new CodeFor(m_script);
+            CodeFor ret = new CodeFor();
             Token token = ReadToken();
             if (token.Type != TokenType.SemiColon)
             {
@@ -295,7 +309,7 @@ namespace Scorpio.Compiler
                 UndoToken();
                 ret.LoopExecutable = ParseStatementBlock(Executable_Block.ForLoop, false, TokenType.RightPar);
             }
-            ret.SetContextExecutable(ParseStatementBlock(Executable_Block.For));
+            ret.BlockExecutable = ParseStatementBlock(Executable_Block.For);
             m_scriptExecutable.AddScriptInstruction(new ScriptInstruction(Opcode.CALL_FOR, ret));
         }
         //解析foreach语句
@@ -303,11 +317,12 @@ namespace Scorpio.Compiler
         {
             CodeForeach ret = new CodeForeach();
             ReadLeftParenthesis();
+            if (PeekToken().Type == TokenType.Var) ReadToken();
             ret.Identifier = ReadIdentifier();
             ReadIn();
             ret.LoopObject = GetObject();
             ReadRightParenthesis();
-            ret.Context = new ScriptContext(m_script, ParseStatementBlock(Executable_Block.Foreach), null, Executable_Block.Foreach);
+            ret.BlockExecutable = ParseStatementBlock(Executable_Block.Foreach);
             m_scriptExecutable.AddScriptInstruction(new ScriptInstruction(Opcode.CALL_FOREACH, ret));
         }
         //解析while（循环语句）
@@ -325,35 +340,32 @@ namespace Scorpio.Compiler
             ret.Condition = GetObject();
             ReadRightParenthesis();
             ReadLeftBrace();
-            for (; ; )
-            {
+            List<TempCase> Cases = new List<TempCase>();
+            for (; ; ) {
                 Token token = ReadToken();
                 if (token.Type == TokenType.Case) {
-                    List<object> vals = new List<object>();
-                    ParseCase(vals);
-                    ret.AddCase(new TempCase(m_script, vals, ParseStatementBlock(Executable_Block.Switch, false, TokenType.Break), Executable_Block.Switch));
+                    List<CodeObject> allow = new List<CodeObject>();
+                    ParseCase(allow);
+                    Cases.Add(new TempCase(m_script, allow, ParseStatementBlock(Executable_Block.Switch, false, TokenType.Break)));
                 } else if (token.Type == TokenType.Default) {
                     ReadColon();
-                    ret.Default = new TempCase(m_script, null, ParseStatementBlock(Executable_Block.Switch, false, TokenType.Break), Executable_Block.Switch);
+                    ret.Default = new TempCase(m_script, null, ParseStatementBlock(Executable_Block.Switch, false, TokenType.Break));
                 } else if (token.Type != TokenType.SemiColon) {
                     UndoToken();
                     break;
                 }
             }
             ReadRightBrace();
+            ret.SetCases(Cases);
             m_scriptExecutable.AddScriptInstruction(new ScriptInstruction(Opcode.CALL_SWITCH, ret));
         }
         //解析case
-        private void ParseCase(List<object> vals)
+        private void ParseCase(List<CodeObject> allow)
         {
-            Token val = ReadToken();
-            if (val.Type == TokenType.String || val.Type == TokenType.Number)
-                vals.Add(val.Lexeme);
-            else
-                throw new ParserException("case 语句 只支持 string和number类型");
+            allow.Add(GetObject());
             ReadColon();
             if (ReadToken().Type == TokenType.Case) {
-                ParseCase(vals);
+                ParseCase(allow);
             } else {
                 UndoToken();
             }
@@ -362,18 +374,12 @@ namespace Scorpio.Compiler
         private void ParseTry()
         {
             CodeTry ret = new CodeTry();
-            {
-                ScriptExecutable exec = ParseStatementBlock(Executable_Block.Context);
-                ret.TryContext = new ScriptContext(m_script, exec);
-            }
-            {
-                ReadCatch();
-                ReadLeftParenthesis();
-                ret.Identifier = ReadIdentifier();
-                ReadRightParenthesis();
-                ScriptExecutable exec = ParseStatementBlock(Executable_Block.Context);
-                ret.CatchContext = new ScriptContext(m_script, exec);
-            }
+            ret.TryExecutable = ParseStatementBlock(Executable_Block.Context);
+            ReadCatch();
+            ReadLeftParenthesis();
+            ret.Identifier = ReadIdentifier();
+            ReadRightParenthesis();
+            ret.CatchExecutable = ParseStatementBlock(Executable_Block.Context);
             m_scriptExecutable.AddScriptInstruction(new ScriptInstruction(Opcode.CALL_TRY, ret));
         }
         //解析throw
@@ -390,7 +396,7 @@ namespace Scorpio.Compiler
             if (peek.Type == TokenType.RightBrace ||
                 peek.Type == TokenType.SemiColon ||
                 peek.Type == TokenType.Finished)
-                m_scriptExecutable.AddScriptInstruction(new ScriptInstruction(Opcode.RET, new CodeScriptObject(m_script, null)));
+                m_scriptExecutable.AddScriptInstruction(new ScriptInstruction(Opcode.RET, null));
             else
                 m_scriptExecutable.AddScriptInstruction(new ScriptInstruction(Opcode.RET, GetObject()));
         }
@@ -418,29 +424,24 @@ namespace Scorpio.Compiler
         {
             Stack<TempOperator> operateStack = new Stack<TempOperator>();
             Stack<CodeObject> objectStack = new Stack<CodeObject>();
-            while (true)
-            {
+            while (true) {
                 objectStack.Push(GetOneObject());
                 if (!P_Operator(operateStack, objectStack))
                     break;
             }
-            while (true)
-            {
+            while (true) {
                 if (operateStack.Count <= 0)
                     break;
                 TempOperator oper = operateStack.Pop();
-                CodeOperator binexp = new CodeOperator(objectStack.Pop(), objectStack.Pop(), oper.Operator);
+                CodeOperator binexp = new CodeOperator(objectStack.Pop(), objectStack.Pop(), oper.Operator, m_strBreviary, GetSourceLine());
                 objectStack.Push(binexp);
             }
             CodeObject ret = objectStack.Pop();
-            if (ret is CodeMember)
-            {
+            if (ret is CodeMember) {
                 CodeMember member = ret as CodeMember;
-                if (member.Calc == CALC.NONE)
-                {
+                if (member.Calc == CALC.NONE) {
                     Token token = ReadToken();
-                    switch (token.Type)
-                    {
+                    switch (token.Type) {
                         case TokenType.Assign:
                         case TokenType.AssignPlus:
                         case TokenType.AssignMinus:
@@ -452,13 +453,23 @@ namespace Scorpio.Compiler
                         case TokenType.AssignXOR:
                         case TokenType.AssignShr:
                         case TokenType.AssignShi:
-                            return new CodeAssign(member, GetObject(), token.Type, m_strBreviary, token.SourceLine);
+                            ret = new CodeAssign(member, GetObject(), token.Type, m_strBreviary, token.SourceLine);
+                            break;
                         default:
                             UndoToken();
                             break;
                     }
                 }
             }
+			if (PeekToken ().Type == TokenType.QuestionMark) {
+				ReadToken();
+				CodeTernary ternary = new CodeTernary();
+				ternary.Allow = ret;
+				ternary.True = GetObject();
+				ReadColon();
+				ternary.False = GetObject();
+				return ternary;
+			}
             return ret;
         }
         //解析操作符
@@ -471,7 +482,7 @@ namespace Scorpio.Compiler
                 TempOperator oper = operateStack.Peek();
                 if (oper.Level >= curr.Level) {
                     operateStack.Pop();
-                    CodeOperator binexp = new CodeOperator(objectStack.Pop(), objectStack.Pop(), oper.Operator);
+                    CodeOperator binexp = new CodeOperator(objectStack.Pop(), objectStack.Pop(), oper.Operator, m_strBreviary, GetSourceLine());
                     objectStack.Push(binexp);
                 } else {
                     break;
@@ -511,7 +522,7 @@ namespace Scorpio.Compiler
                     ret = new CodeFunction(ParseFunctionDeclaration(false));
                     break;
                 case TokenType.LeftPar:
-                    ret = GetObject();
+                    ret = new CodeRegion(GetObject());
                     ReadRightParenthesis();
                     break;
                 case TokenType.LeftBracket:
@@ -526,9 +537,12 @@ namespace Scorpio.Compiler
                     ret = GetEval();
                     break;
                 case TokenType.Null:
+                    ret = new CodeScriptObject(m_script, null);
+                    break;
                 case TokenType.Boolean:
                 case TokenType.Number:
                 case TokenType.String:
+                case TokenType.SimpleString:
                     ret = new CodeScriptObject(m_script, token.Lexeme);
                     break;
                 default:
@@ -537,7 +551,6 @@ namespace Scorpio.Compiler
             ret.StackInfo = new StackInfo(m_strBreviary, token.SourceLine);
             ret = GetVariable(ret);
             ret.Not = not;
-            ret = GetTernary(ret);
             ret.Negative = negative;
             if (ret is CodeMember) {
                 if (calc != CALC.NONE) {
@@ -574,10 +587,8 @@ namespace Scorpio.Compiler
                     ReadRightBracket();
                     if (member is CodeScriptObject) {
                         ScriptObject obj = ((CodeScriptObject)member).Object;
-                        if (obj is ScriptNumber)
-                            ret = new CodeMember((ScriptNumber)obj, ret);
-                        else if (obj is ScriptString)
-                            ret = new CodeMember(((ScriptString)obj).Value, ret);
+                        if (obj is ScriptNumber || obj is ScriptString)
+                            ret = new CodeMember(obj.ObjectValue, ret);
                         else
                             throw new ParserException("获取变量只能是 number或string", m);
                     } else {
@@ -590,28 +601,13 @@ namespace Scorpio.Compiler
                     UndoToken();
                     break;
                 }
+                ret.StackInfo = new StackInfo(m_strBreviary, m.SourceLine);
             }
             return ret;
-        }
-        //返回三元运算符
-        private CodeObject GetTernary(CodeObject parent)
-        {
-            if (PeekToken().Type == TokenType.QuestionMark)
-            {
-                CodeTernary ret = new CodeTernary();
-                ret.Allow = parent;
-                ReadToken();
-                ret.True = GetObject();
-                ReadColon();
-                ret.False = GetObject();
-                return ret;
-            }
-            return parent;
         }
         //返回一个调用函数 Object
         private CodeCallFunction GetFunction(CodeObject member)
         {
-            CodeCallFunction ret = new CodeCallFunction();
             ReadLeftParenthesis();
             List<CodeObject> pars = new List<CodeObject>();
             Token token = PeekToken();
@@ -627,9 +623,7 @@ namespace Scorpio.Compiler
                     throw new ParserException("Comma ',' or right parenthesis ')' expected in function declararion.", token);
             }
             ReadRightParenthesis();
-            ret.Member = member;
-            ret.Parameters = pars;
-            return ret;
+            return new CodeCallFunction(member, pars);
         }
         //返回数组
         private CodeArray GetArray()
@@ -639,16 +633,19 @@ namespace Scorpio.Compiler
             CodeArray ret = new CodeArray();
             while (token.Type != TokenType.RightBracket)
             {
-                ret.Elements.Add(GetObject());
-                token = PeekToken();
-                if (token.Type == TokenType.Comma)
-                    ReadComma();
-                else if (token.Type == TokenType.RightBracket)
+                if (PeekToken().Type == TokenType.RightBracket)
                     break;
-                else
+                ret._Elements.Add(GetObject());
+                token = PeekToken();
+                if (token.Type == TokenType.Comma) {
+                    ReadComma();
+                } else if (token.Type == TokenType.RightBracket) {
+                    break;
+                } else
                     throw new ParserException("Comma ',' or right parenthesis ']' expected in array object.", token);
             }
             ReadRightBracket();
+            ret.Init();
             return ret;
         }
         //返回Table数据
@@ -656,16 +653,12 @@ namespace Scorpio.Compiler
         {
             CodeTable ret = new CodeTable();
             ReadLeftBrace();
-            while (PeekToken().Type != TokenType.RightBrace)
-            {
+            while (PeekToken().Type != TokenType.RightBrace) {
                 Token token = ReadToken();
-                if (token.Type == TokenType.Identifier || token.Type == TokenType.String || token.Type == TokenType.Number) {
+                if (token.Type == TokenType.Identifier || token.Type == TokenType.String || token.Type == TokenType.SimpleString || token.Type == TokenType.Number) {
                     Token next = ReadToken();
                     if (next.Type == TokenType.Assign || next.Type == TokenType.Colon) {
-                        if (token.Lexeme is double)
-                            ret.Variables.Add(new TableVariable(Util.ToInt32(token.Lexeme), GetObject()));
-                        else
-                            ret.Variables.Add(new TableVariable(token.Lexeme, GetObject()));
+                        ret._Variables.Add(new CodeTable.TableVariable(token.Lexeme, GetObject()));
                         Token peek = PeekToken();
                         if (peek.Type == TokenType.Comma || peek.Type == TokenType.SemiColon) {
                             ReadToken();
@@ -675,12 +668,13 @@ namespace Scorpio.Compiler
                     }
                 } else if (token.Type == TokenType.Function) {
                     UndoToken();
-                    ret.Functions.Add(ParseFunctionDeclaration(true));
+                    ret._Functions.Add(ParseFunctionDeclaration(true));
                 } else {
-                    throw new ParserException("Table开始关键字必须为 变量名称或者function关键字", token);
+                    throw new ParserException("Table开始关键字必须为[变量名称]或者[function]关键字", token);
                 }
             }
             ReadRightBrace();
+            ret.Init();
             return ret;
         }
         //返回执行一段字符串

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Reflection;
 using System.Collections.Generic;
 using System.Text;
 using Scorpio;
@@ -11,7 +12,7 @@ namespace Scorpio.Userdata
         private Dictionary<Type, DefaultScriptUserdataEnum> m_Enums = new Dictionary<Type, DefaultScriptUserdataEnum>();                        //所有枚举集合
         private Dictionary<Type, DefaultScriptUserdataDelegateType> m_Delegates = new Dictionary<Type, DefaultScriptUserdataDelegateType>();    //所有委托类型集合
         private Dictionary<Type, UserdataType> m_Types = new Dictionary<Type, UserdataType>();                                                  //所有的类集合
-        public DefaultScriptUserdataEnum GetEnum(Type type)
+        public ScriptUserdata GetEnum(Type type)
         {
             if (m_Enums.ContainsKey(type))
                 return m_Enums[type];
@@ -19,7 +20,7 @@ namespace Scorpio.Userdata
             m_Enums.Add(type, ret);
             return ret;
         }
-        public DefaultScriptUserdataDelegateType GetDelegate(Type type)
+        public ScriptUserdata GetDelegate(Type type)
         {
             if (m_Delegates.ContainsKey(type))
                 return m_Delegates[type];
@@ -31,7 +32,12 @@ namespace Scorpio.Userdata
         {
             if (m_Types.ContainsKey(type))
                 return m_Types[type];
-            UserdataType scorpioType = new UserdataType(m_Script, type);
+            UserdataType scorpioType = null;
+            if (m_Script.ContainsFastReflectClass(type)) {
+                scorpioType = new FastReflectUserdataType(m_Script, type, m_Script.GetFastReflectClass(type));
+            } else {
+                scorpioType = new ReflectUserdataType(m_Script, type);
+            }
             m_Types.Add(type, scorpioType);
             return scorpioType;
         }
@@ -52,6 +58,8 @@ namespace Scorpio.Userdata
             }
             if (obj is Delegate)
                 return new DefaultScriptUserdataDelegate(script, (Delegate)obj);
+            else if (obj is BridgeEventInfo)
+                return new DefaultScriptUserdataEventInfo(script, (BridgeEventInfo)obj);
             return new DefaultScriptUserdataObject(script, obj, GetScorpioType(obj.GetType()));
         }
     }

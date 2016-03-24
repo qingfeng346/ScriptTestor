@@ -14,20 +14,24 @@ namespace Scorpio.Userdata
             this.Value = value;
             this.ValueType = value;
             m_Enums = new Dictionary<string, ScriptEnum>();
-            Array values = Enum.GetValues(ValueType);
-            foreach (var v in values) {
-                m_Enums[v.ToString()] = script.CreateEnum(v);
+            //此处获取枚举列表不能使用 Enum.GetValues 此函数在UWP平台下的master模式会报错
+            string[] names = Enum.GetNames(ValueType);
+            foreach (var name in names) {
+                m_Enums[name] = script.CreateEnum(Enum.Parse(ValueType, name));
             }
         }
         public override object Call(ScriptObject[] parameters)
         {
-            throw new ScriptException("枚举类型不支持实例化");
+            throw new ExecutionException(Script, "枚举类型不支持实例化");
         }
-        public override ScriptObject GetValue(string strName)
+        public override ScriptObject GetValue(object key)
         {
-            if (m_Enums.ContainsKey(strName))
-                return m_Enums[strName];
-            throw new ScriptException("枚举[" + ValueType.ToString() + "] 元素[" + strName + "] 不存在");
+            if (!(key is string))
+                throw new ExecutionException(Script, "Enum GetValue只支持String类型");
+            string name = (string)key;
+            if (m_Enums.ContainsKey(name))
+                return m_Enums[name];
+            throw new ExecutionException(Script, "枚举[" + ValueType.ToString() + "] 元素[" + name + "] 不存在");
         }
     }
 }

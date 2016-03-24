@@ -14,21 +14,19 @@ namespace Scorpio.Library
             Script m_Script;
             List<ScriptObject>.Enumerator m_Enumerator;
             int m_Index = 0;
-            ScriptTable m_Table;
             public ArrayPairs(Script script, ScriptArray obj)
             {
                 m_Script = script;
                 m_Index = 0;
-                m_Table = m_Script.CreateTable();
                 m_Enumerator = obj.GetIterator();
             }
             public object Call(ScriptObject[] args)
             {
-                if (m_Enumerator.MoveNext())
-                {
-                    m_Table.SetValue("key", m_Script.CreateObject(m_Index++));
-                    m_Table.SetValue("value", m_Enumerator.Current);
-                    return m_Table;
+                if (m_Enumerator.MoveNext()) {
+                    ScriptTable table = m_Script.CreateTable();
+                    table.SetValue("key", m_Script.CreateObject(m_Index++));
+                    table.SetValue("value", m_Enumerator.Current);
+                    return table;
                 }
                 return null;
             }
@@ -67,21 +65,19 @@ namespace Scorpio.Library
         {
             Script m_Script;
             Dictionary<object, ScriptObject>.Enumerator m_Enumerator;
-            ScriptTable m_Table;
             public TablePairs(Script script, ScriptTable obj)
             {
                 m_Script = script;
-                m_Table = m_Script.CreateTable();
                 m_Enumerator = obj.GetIterator();
             }
             public object Call(ScriptObject[] args)
             {
-                if (m_Enumerator.MoveNext())
-                {
+                if (m_Enumerator.MoveNext()) {
+                    ScriptTable table = m_Script.CreateTable();
                     KeyValuePair<object, ScriptObject> v = m_Enumerator.Current;
-                    m_Table.SetValue("key", m_Script.CreateObject(v.Key));
-                    m_Table.SetValue("value", v.Value);
-                    return m_Table;
+                    table.SetValue("key", m_Script.CreateObject(v.Key));
+                    table.SetValue("value", v.Value);
+                    return table;
                 }
                 return null;
             }
@@ -116,12 +112,14 @@ namespace Scorpio.Library
         }
         private class UserdataPairs : ScorpioHandle
         {
+            Script m_Script;
             System.Collections.IEnumerator m_Enumerator;
-            public UserdataPairs(ScriptUserdata obj)
+            public UserdataPairs(Script script, ScriptUserdata obj)
             {
+                m_Script = script;
                 object value = obj.Value;
                 System.Collections.IEnumerable ienumerable = value as System.Collections.IEnumerable;
-                if (ienumerable == null) throw new ExecutionException("pairs 只支持继承 IEnumerable 的类");
+                if (ienumerable == null) throw new ExecutionException(m_Script, "pairs 只支持继承 IEnumerable 的类");
                 m_Enumerator = ienumerable.GetEnumerator();
             }
             public object Call(ScriptObject[] args)
@@ -138,10 +136,24 @@ namespace Scorpio.Library
             script.SetObjectInternal("kpairs", script.CreateFunction(new kpairs(script)));
             script.SetObjectInternal("vpairs", script.CreateFunction(new vpairs(script)));
             script.SetObjectInternal("type", script.CreateFunction(new type()));
+            script.SetObjectInternal("is_null", script.CreateFunction(new is_null()));
+            script.SetObjectInternal("is_bool", script.CreateFunction(new is_bool()));
+            script.SetObjectInternal("is_number", script.CreateFunction(new is_number()));
+            script.SetObjectInternal("is_double", script.CreateFunction(new is_double()));
+            script.SetObjectInternal("is_long", script.CreateFunction(new is_long()));
+            script.SetObjectInternal("is_int", script.CreateFunction(new is_int()));
+            script.SetObjectInternal("is_string", script.CreateFunction(new is_string()));
+            script.SetObjectInternal("is_function", script.CreateFunction(new is_function()));
+            script.SetObjectInternal("is_array", script.CreateFunction(new is_array()));
+            script.SetObjectInternal("is_table", script.CreateFunction(new is_table()));
+            script.SetObjectInternal("is_enum", script.CreateFunction(new is_enum()));
+            script.SetObjectInternal("is_userdata", script.CreateFunction(new is_userdata()));
             script.SetObjectInternal("branchtype", script.CreateFunction(new branchtype()));
             script.SetObjectInternal("typeof", script.CreateFunction(new userdatatype()));
             script.SetObjectInternal("tonumber", script.CreateFunction(new tonumber(script)));
             script.SetObjectInternal("tolong", script.CreateFunction(new tolong(script)));
+            script.SetObjectInternal("toint", script.CreateFunction(new toint(script)));
+            script.SetObjectInternal("toenum", script.CreateFunction(new toenum(script)));
             script.SetObjectInternal("tostring", script.CreateFunction(new tostring(script)));
             script.SetObjectInternal("clone", script.CreateFunction(new clone()));
             script.SetObjectInternal("require", script.CreateFunction(new require(script)));
@@ -157,10 +169,9 @@ namespace Scorpio.Library
         }
         private class print : ScorpioHandle
         {
-            public object Call(ScriptObject[] args)
-            {
+            public object Call(ScriptObject[] args) {
                 for (int i = 0; i < args.Length; ++i) {
-                    Console.WriteLine(args[i].ToString());
+                    ScriptExtensions.print(args[i].ToString());
                 }
                 return null;
             }
@@ -180,8 +191,8 @@ namespace Scorpio.Library
                 else if (obj is ScriptTable)
                     return m_script.CreateFunction(new TablePairs(m_script, (ScriptTable)obj));
                 else if (obj is ScriptUserdata)
-                    return m_script.CreateFunction(new UserdataPairs((ScriptUserdata)obj));
-                throw new ExecutionException("pairs必须用语table或array或者继承IEnumerable的userdata 类型");
+                    return m_script.CreateFunction(new UserdataPairs(m_script, (ScriptUserdata)obj));
+                throw new ExecutionException(m_script, "pairs必须用语table或array或者继承IEnumerable的userdata 类型");
             }
         }
         private class kpairs : ScorpioHandle
@@ -198,7 +209,7 @@ namespace Scorpio.Library
                     return m_script.CreateFunction(new ArrayKPairs((ScriptArray)obj));
                 else if (obj is ScriptTable)
                     return m_script.CreateFunction(new TableKPairs((ScriptTable)obj));
-                throw new ExecutionException("kpairs必须用语table或array类型");
+                throw new ExecutionException(m_script, "kpairs必须用语table或array类型");
             }
         }
         private class vpairs : ScorpioHandle
@@ -215,14 +226,98 @@ namespace Scorpio.Library
                     return m_script.CreateFunction(new ArrayVPairs((ScriptArray)obj));
                 else if (obj is ScriptTable)
                     return m_script.CreateFunction(new TableVPairs((ScriptTable)obj));
-                throw new ExecutionException("vpairs必须用语table或array类型");
+                throw new ExecutionException(m_script, "vpairs必须用语table或array类型");
             }
         }
         private class type : ScorpioHandle
         {
             public object Call(ScriptObject[] args)
             {
-                return args[0].Type;
+                return (int)args[0].Type;
+            }
+        }
+        private class is_null : ScorpioHandle
+        {
+            public object Call(ScriptObject[] args)
+            {
+                return args[0] is ScriptNull;
+            }
+        }
+        private class is_bool : ScorpioHandle
+        {
+            public object Call(ScriptObject[] args)
+            {
+                return args[0] is ScriptBoolean;
+            }
+        }
+        private class is_number : ScorpioHandle
+        {
+            public object Call(ScriptObject[] args)
+            {
+                return args[0] is ScriptNumber;
+            }
+        }
+        private class is_double : ScorpioHandle
+        {
+            public object Call(ScriptObject[] args)
+            {
+                return args[0] is ScriptNumberDouble;
+            }
+        }
+        private class is_long : ScorpioHandle
+        {
+            public object Call(ScriptObject[] args)
+            {
+                return args[0] is ScriptNumberLong;
+            }
+        }
+        private class is_int : ScorpioHandle
+        {
+            public object Call(ScriptObject[] args)
+            {
+                return args[0] is ScriptNumberInt;
+            }
+        }
+        private class is_string : ScorpioHandle
+        {
+            public object Call(ScriptObject[] args)
+            {
+                return args[0] is ScriptString;
+            }
+        }
+        private class is_function : ScorpioHandle
+        {
+            public object Call(ScriptObject[] args)
+            {
+                return args[0] is ScriptFunction;
+            }
+        }
+        private class is_array : ScorpioHandle
+        {
+            public object Call(ScriptObject[] args)
+            {
+                return args[0] is ScriptArray;
+            }
+        }
+        private class is_table : ScorpioHandle
+        {
+            public object Call(ScriptObject[] args)
+            {
+                return args[0] is ScriptTable;
+            }
+        }
+        private class is_enum : ScorpioHandle
+        {
+            public object Call(ScriptObject[] args)
+            {
+                return args[0] is ScriptEnum;
+            }
+        }
+        private class is_userdata : ScorpioHandle
+        {
+            public object Call(ScriptObject[] args)
+            {
+                return args[0] is ScriptUserdata;
             }
         }
         private class branchtype : ScorpioHandle
@@ -249,9 +344,8 @@ namespace Scorpio.Library
             public object Call(ScriptObject[] args)
             {
                 ScriptObject obj = args[0];
-                if (obj is ScriptNumber || obj is ScriptString || obj is ScriptEnum)
-                    return m_script.CreateNumber(Util.ToDouble(obj.ObjectValue));
-                throw new ExecutionException("不能从类型 " + obj.Type + " 转换成Number类型");
+                Util.Assert(obj is ScriptNumber || obj is ScriptString || obj is ScriptEnum, m_script, "tonumber 不能从类型 " + obj.Type + " 转换成Number类型");
+                return m_script.CreateDouble(Util.ToDouble(obj.ObjectValue));
             }
         }
         private class tolong : ScorpioHandle
@@ -264,9 +358,38 @@ namespace Scorpio.Library
             public object Call(ScriptObject[] args)
             {
                 ScriptObject obj = args[0];
-                if (obj is ScriptNumber || obj is ScriptString || obj is ScriptEnum)
-                    return m_script.CreateNumber(Util.ToInt64(obj.ObjectValue));
-                throw new ExecutionException("不能从类型 " + obj.Type + " 转换成Long类型");
+                Util.Assert(obj is ScriptNumber || obj is ScriptString || obj is ScriptEnum, m_script, "tolong 不能从类型 " + obj.Type + " 转换成Long类型");
+                return m_script.CreateLong(Util.ToInt64(obj.ObjectValue));
+            }
+        }
+        private class toint : ScorpioHandle
+        {
+            private Script m_script;
+            public toint(Script script)
+            {
+                m_script = script;
+            }
+            public object Call(ScriptObject[] args)
+            {
+                ScriptObject obj = args[0];
+                Util.Assert(obj is ScriptNumber || obj is ScriptString || obj is ScriptEnum, m_script, "toint 不能从类型 " + obj.Type + " 转换成int类型");
+                return m_script.CreateInt(Util.ToInt32(obj.ObjectValue));
+            }
+        }
+        private class toenum : ScorpioHandle
+        {
+            private Script m_script;
+            public toenum(Script script)
+            {
+                m_script = script;
+            }
+            public object Call(ScriptObject[] args)
+            {
+                Util.Assert(args.Length == 2, m_script, "toenum 第一个参数是枚举类 第二个参数必须是number类型");
+                ScriptUserdata obj = args[0] as ScriptUserdata;
+                ScriptNumber number = args[1] as ScriptNumber;
+                Util.Assert(obj != null && number != null, m_script, "toenum 第一个参数是枚举类 第二个参数必须是number类型");
+                return m_script.CreateEnum(Enum.ToObject(obj.ValueType, number.ToInt32()));
             }
         }
         private class tostring : ScorpioHandle
@@ -300,8 +423,8 @@ namespace Scorpio.Library
             public object Call(ScriptObject[] args)
             {
                 ScriptString str = args[0] as ScriptString;
-                Util.Assert(str != null, "require 参数必须是 string");
-                return m_script.LoadFile(m_script.GetValue("searchpath") + "/" + str.Value);
+                Util.Assert(str != null, m_script, "require 参数必须是 string");
+                return m_script.LoadSearchPathFile(str.Value);
             }
         }
         private class load_assembly : ScorpioHandle
@@ -314,8 +437,8 @@ namespace Scorpio.Library
             public object Call(ScriptObject[] args)
             {
                 ScriptString str = args[0] as ScriptString;
-                if (str == null) throw new ExecutionException("load_assembly 参数必须是 string");
-                m_script.PushAssembly(Assembly.Load(str.Value));
+                Util.Assert(str != null, m_script, "load_assembly 参数必须是 string");
+                m_script.PushAssembly(Assembly.Load(new AssemblyName(str.Value)));
                 return null;
             }
         }
@@ -330,8 +453,8 @@ namespace Scorpio.Library
             {
                 try {
                     ScriptString str = args[0] as ScriptString;
-                    if (str == null) throw new ExecutionException("load_assembly 参数必须是 string");
-                    m_script.PushAssembly(Assembly.Load(str.Value));
+                    Util.Assert(str != null, m_script, "load_assembly 参数必须是 string");
+                    m_script.PushAssembly(Assembly.Load(new AssemblyName(str.Value)));
                 } catch (System.Exception ) { }
                 return null;
             }
@@ -346,7 +469,7 @@ namespace Scorpio.Library
             public object Call(ScriptObject[] args)
             {
                 ScriptUserdata assembly = args[0] as ScriptUserdata;
-                if (assembly == null) throw new ExecutionException("push_assembly 参数必须是 Assembly 类型");
+                Util.Assert(assembly != null, m_script, "push_assembly 参数必须是 Assembly 类型");
                 m_script.PushAssembly(assembly.ObjectValue as Assembly);
                 return null;
             }
@@ -361,7 +484,7 @@ namespace Scorpio.Library
             public object Call(ScriptObject[] args)
             {
                 ScriptString str = args[0] as ScriptString;
-                if (str == null) throw new ExecutionException("import_type 参数必须是 string");
+                Util.Assert(str != null, m_script, "import_type 参数必须是 string");
                 return m_script.LoadType(str.Value);
             }
         }
@@ -375,15 +498,14 @@ namespace Scorpio.Library
             public object Call(ScriptObject[] args)
             {
                 ScriptUserdata userdata = args[0] as ScriptUserdata;
-                if (userdata == null) throw new ExecutionException("generic_type 参数必须是 userdata");
+                Util.Assert(userdata != null, m_script, "generic_type 第1个参数必须是 userdata");
                 Type[] types = new Type[args.Length - 1];
-                for (int i = 1; i < args.Length; ++i)
-                {
+                for (int i = 1; i < args.Length; ++i) {
                     ScriptUserdata type = args[i] as ScriptUserdata;
-                    if (userdata == null) throw new ExecutionException("generic_type 参数必须是 userdata");
+                    Util.Assert(type != null, m_script, "generic_type 第" + (i+1) + "参数必须是 userdata");
                     types[i - 1] = type.ValueType;
                 }
-                return userdata.ValueType.MakeGenericType(types);
+                return m_script.GetUserdataFactory().GetScorpioType(userdata.ValueType).MakeGenericType(types);
             }
         }
         private class generic_method : ScorpioHandle
@@ -395,14 +517,17 @@ namespace Scorpio.Library
             }
             public object Call(ScriptObject[] args)
             {
-                if (args.Length < 2) throw new ExecutionException("generic_method 参数必须大于等于2个");
                 ScriptFunction func = args[0] as ScriptFunction;
-                if (func == null) throw new ExecutionException("generic_method 参数必须是 function");
+                Util.Assert(func != null, m_script, "generic_method 第1个参数必须是 function");
                 ScorpioMethod method = func.Method;
-                if (func == null) throw new ExecutionException("generic_method 参数必须是 程序函数");
-                ScriptObject[] pars = new ScriptObject[args.Length - 1];
-                Array.Copy(args, 1, pars, 0, pars.Length);
-                return method.MakeGenericMethod(pars);
+                Util.Assert(method != null, m_script, "generic_method 第1个参数必须是 程序函数");
+                Type[] types = new Type[args.Length - 1];
+                for (int i = 1; i < args.Length; ++i) {
+                    ScriptUserdata type = args[i] as ScriptUserdata;
+                    Util.Assert(type != null, m_script, "generic_method 第" + (i + 1) + "参数必须是 userdata");
+                    types[i - 1] = type.ValueType;
+                }
+                return method.MakeGenericMethod(types);
             }
         }
     }

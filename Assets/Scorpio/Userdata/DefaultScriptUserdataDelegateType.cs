@@ -1,13 +1,38 @@
 ﻿using System;
+
+#if SCORPIO_DYNAMIC_DELEGATE
 using System.Collections.Generic;
 using System.Text;
 using System.Reflection;
 using System.Reflection.Emit;
+using Scorpio.Exception;
+#endif
+
 namespace Scorpio.Userdata
 {
+    public interface DelegateTypeFactory {
+        Delegate CreateDelegate(Script script, Type type, ScriptFunction func);
+    }
+#if !SCORPIO_DYNAMIC_DELEGATE
+    public class DefaultScriptUserdataDelegateType : ScriptUserdata
+    {
+        private static DelegateTypeFactory m_Factory = null;
+        public static void SetFactory(DelegateTypeFactory factory) { m_Factory = factory; }
+        public DefaultScriptUserdataDelegateType(Script script, Type value) : base(script)
+        {
+            this.Value = value;
+            this.ValueType = value;
+        }
+        public override object Call(ScriptObject[] parameters)
+        {
+            return m_Factory != null ? m_Factory.CreateDelegate(Script, ValueType, parameters[0] as ScriptFunction) : null;
+        }
+    }
+#else
     /// <summary> 动态委托类型(声明) </summary>
     public class DefaultScriptUserdataDelegateType : ScriptUserdata
     {
+        public static void SetFactory(DelegateTypeFactory factory) {  }
         private static readonly MethodInfo DynamicDelegateMethod;
         private static readonly Type DynamicDelegateType = typeof(DynamicDelegate);
         static DefaultScriptUserdataDelegateType()
@@ -16,10 +41,12 @@ namespace Scorpio.Userdata
         }
         private class DynamicDelegate
         {
+            private Script m_Script;
             private Type m_ReturnType;
             private ScriptFunction m_Function;
-            public DynamicDelegate(ScriptFunction function, Type returnType)
+            public DynamicDelegate(Script script, ScriptFunction function, Type returnType)
             {
+                m_Script = script;
                 m_Function = function;
                 m_ReturnType = returnType;
             }
@@ -27,10 +54,12 @@ namespace Scorpio.Userdata
             {
                 if (Util.IsVoid(m_ReturnType))
                     return m_Function.call(args);
-                return Util.ChangeType((ScriptObject)m_Function.call(args), m_ReturnType);
+                ScriptObject ret = (ScriptObject)m_Function.call(args) ??  m_Script.Null;
+                if (Util.CanChangeType(ret, m_ReturnType))
+                    return Util.ChangeType(m_Script, ret, m_ReturnType);
+                throw new ExecutionException(m_Script, "委托返回值不能从源类型:" + (ret.IsNull ? "null" : ret.ObjectValue.GetType().Name) + " 转换成目标类型:" + m_ReturnType.Name);
             }
         }
-
         private Type m_DelegateType;            //委托类型
         private Type m_ReturnType;              //返回值类型
         private DynamicMethod MethodFactory;    //动态函数
@@ -38,7 +67,6 @@ namespace Scorpio.Userdata
         {
             this.Value = value;
             this.ValueType = value;
-
             var InvokeMethod = value.GetMethod("Invoke");
             m_DelegateType = value;
             m_ReturnType = InvokeMethod.ReturnType;
@@ -52,8 +80,7 @@ namespace Scorpio.Userdata
             generator.Emit(OpCodes.Ldarg_0);
             generator.Emit(OpCodes.Ldc_I4, argTypes.Count - 1);
             generator.Emit(OpCodes.Newarr, typeof(object));
-            for (int i = 1; i < argTypes.Count; ++i)
-            {
+            for (int i = 1; i < argTypes.Count; ++i) {
                 generator.Emit(OpCodes.Dup);
                 generator.Emit(OpCodes.Ldc_I4, i - 1);
                 generator.Emit(OpCodes.Ldarg, i);
@@ -69,13 +96,10 @@ namespace Scorpio.Userdata
                 generator.Emit(OpCodes.Ret);
             }
         }
-        public Delegate CreateDelegate(ScriptFunction func)
-        {
-            return MethodFactory.CreateDelegate(m_DelegateType, new DynamicDelegate(func, m_ReturnType));
-        }
         public override object Call(ScriptObject[] parameters)
         {
-            return CreateDelegate(parameters[0] as ScriptFunction);
+            return MethodFactory.CreateDelegate(m_DelegateType, new DynamicDelegate(Script, parameters[0] as ScriptFunction, m_ReturnType));
         }
     }
+#endif
 }

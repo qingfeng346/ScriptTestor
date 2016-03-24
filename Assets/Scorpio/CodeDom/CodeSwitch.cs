@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using Scorpio;
+﻿using System.Collections.Generic;
 using Scorpio.CodeDom.Temp;
 namespace Scorpio.CodeDom
 {
@@ -10,10 +7,9 @@ namespace Scorpio.CodeDom
     {
         internal CodeObject Condition;
         internal TempCase Default;
-        internal List<TempCase> Cases = new List<TempCase>();
-        internal void AddCase(TempCase con)
-        {
-            Cases.Add(con);
+        internal TempCase[] Cases;
+        internal void SetCases(List<TempCase> Cases) {
+            this.Cases = Cases.ToArray();
         }
     }
 }

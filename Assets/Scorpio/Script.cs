@@ -9,6 +9,7 @@ using Scorpio.Exception;
 using Scorpio.Library;
 using Scorpio.Userdata;
 using Scorpio.Variable;
+using Scorpio.Serialize;
 namespace Scorpio
 {
     //脚本类
@@ -19,25 +20,57 @@ namespace Scorpio
         public const BindingFlags BindingFlag = BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.FlattenHierarchy;
         private const string GLOBAL_TABLE = "_G";               //全局table
         private const string GLOBAL_VERSION = "_VERSION";       //版本号
+        private const string GLOBAL_SCRIPT = "_SCRIPT";         //Script对象
         private IScriptUserdataFactory m_UserdataFactory = null;                //Userdata工厂
         private ScriptTable m_GlobalTable;                                      //全局Table
         private List<StackInfo> m_StackInfoStack = new List<StackInfo>();       //堆栈数据
         private List<Assembly> m_Assembly = new List<Assembly>();               //所有代码集合
+        private List<String> m_SearchPath = new List<String>();                 //request所有文件的路径集合
+        private Dictionary<Type, IScorpioFastReflectClass> m_FastReflectClass = new Dictionary<Type, IScorpioFastReflectClass>();
         private StackInfo m_StackInfo = new StackInfo();                        //最近堆栈数据
+        public ScriptNull Null { get; private set; }                            //null对象
+        public ScriptBoolean True { get; private set; }                         //true对象
+        public ScriptBoolean False { get; private set; }                        //false对象
+        public ScriptBoolean GetBoolean(bool value) { return value ? True : False;  }
+        public Script() {
+            Null = new ScriptNull(this);
+            True = new ScriptBoolean(this, true);
+            False = new ScriptBoolean(this, false);
+            m_UserdataFactory = new DefaultScriptUserdataFactory(this);
+            m_GlobalTable = CreateTable();
+            m_GlobalTable.SetValue(GLOBAL_TABLE, m_GlobalTable);
+            m_GlobalTable.SetValue(GLOBAL_VERSION, CreateString(Version));
+            m_GlobalTable.SetValue(GLOBAL_SCRIPT, CreateObject(this));
+            PushAssembly(ScriptExtensions.GetAssembly(typeof(object)));
+            PushAssembly(ScriptExtensions.GetAssembly(GetType()));
+        }
         public ScriptObject LoadFile(String strFileName)
         {
             return LoadFile(strFileName, Encoding.UTF8);
         }
-        public ScriptObject LoadFile(String fileName, string encoding)
-        {
-            return LoadFile(fileName, Encoding.GetEncoding(encoding));
-        }
         public ScriptObject LoadFile(String fileName, Encoding encoding)
         {
+            return LoadBuffer(fileName, ScriptExtensions.GetFileBuffer(fileName), encoding);
+        }
+        public ScriptObject LoadBuffer(byte[] buffer)
+        {
+            return LoadBuffer("Undefined", buffer, Encoding.UTF8);
+        }
+        public ScriptObject LoadBuffer(String strBreviary, byte[] buffer)
+        {
+            return LoadBuffer(strBreviary, buffer, Encoding.UTF8);
+        }
+        public ScriptObject LoadBuffer(String strBreviary, byte[] buffer, Encoding encoding)
+        {
+            if (buffer == null || buffer.Length == 0) { return null; }
             try {
-                return LoadString(fileName, Util.GetFileString(fileName, encoding));
+                if (buffer[0] == 0) {
+                    return LoadTokens(strBreviary, ScorpioMaker.Deserialize(buffer));
+                } else {
+                    return LoadString(strBreviary, encoding.GetString(buffer, 0, buffer.Length));
+                }
             } catch (System.Exception e) {
-                throw new ScriptException("load file [" + fileName + "] is error : " + e.ToString());
+                throw new ScriptException("load buffer [" + strBreviary + "] is error : " + e.ToString());
             }
         }
         public ScriptObject LoadString(String strBuffer)
@@ -46,20 +79,54 @@ namespace Scorpio
         }
         public ScriptObject LoadString(String strBreviary, String strBuffer)
         {
-            return LoadString(strBreviary, strBuffer, null);
+            return LoadString(strBreviary, strBuffer, null, true);
         }
-        internal ScriptObject LoadString(String strBreviary, String strBuffer, ScriptContext context)
+        internal ScriptObject LoadString(String strBreviary, String strBuffer, ScriptContext context, bool clearStack)
         {
             try {
-                m_StackInfoStack.Clear();
-                ScriptLexer scriptLexer = new ScriptLexer(strBuffer);
-                strBreviary = Util.IsNullOrEmpty(strBreviary) ? scriptLexer.GetBreviary() : strBreviary;
-                ScriptParser scriptParser = new ScriptParser(this, scriptLexer.GetTokens(), strBreviary);
-                ScriptExecutable scriptExecutable = scriptParser.Parse();
-                return new ScriptContext(this, scriptExecutable, context, Executable_Block.Context).Execute();
+                if (Util.IsNullOrEmpty(strBuffer)) return Null;
+                if (clearStack) m_StackInfoStack.Clear();
+                ScriptLexer scriptLexer = new ScriptLexer(strBuffer, strBreviary);
+				return Load(scriptLexer.GetBreviary(), scriptLexer.GetTokens(), context);
             } catch (System.Exception e) {
                 throw new ScriptException("load buffer [" + strBreviary + "] is error : " + e.ToString());
             }
+        }
+        public ScriptObject LoadTokens(List<Token> tokens)
+        {
+            return LoadTokens("Undefined", tokens);
+        }
+        public ScriptObject LoadTokens(String strBreviary, List<Token> tokens)
+        {
+            try {
+                if (tokens.Count == 0) return Null;
+                m_StackInfoStack.Clear();
+                return Load(strBreviary, tokens, null);
+            } catch (System.Exception e) {
+                throw new ScriptException("load tokens [" + strBreviary + "] is error : " + e.ToString());
+            }
+        }
+        private ScriptObject Load(String strBreviary, List<Token> tokens, ScriptContext context)
+        {
+            if (tokens.Count == 0) return Null;
+            ScriptParser scriptParser = new ScriptParser(this, tokens, strBreviary);
+            ScriptExecutable scriptExecutable = scriptParser.Parse();
+            return new ScriptContext(this, scriptExecutable, context, Executable_Block.Context).Execute();
+        }
+        public void PushSearchPath(string path)
+        {
+            if (!m_SearchPath.Contains(path))
+                m_SearchPath.Add(path);
+        }
+        public ScriptObject LoadSearchPathFile(String fileName)
+        {
+            for (int i = 0; i < m_SearchPath.Count; ++i)
+            {
+                string file = m_SearchPath[i] + "/" + fileName;
+                if (ScriptExtensions.FileExist(file))
+                    return LoadFile(file);
+            }
+            throw new ExecutionException(this, "require 找不到文件 : " + fileName);
         }
         public void PushAssembly(Assembly assembly)
         {
@@ -71,22 +138,39 @@ namespace Scorpio
         {
             for (int i = 0; i < m_Assembly.Count;++i )
             {
-                Type type = m_Assembly[i].GetType(str, false);
+                Type type = m_Assembly[i].GetType(str);
                 if (type != null) return CreateUserdata(type);
             }
             {
-                Type type = Type.GetType(str, false);
+                Type type = Type.GetType(str, false, false);
                 if (type != null) return CreateUserdata(type);
             }
-            return ScriptNull.Instance;
+            return Null;
+        }
+        public void PushFastReflectClass(Type type, IScorpioFastReflectClass value) {
+            m_FastReflectClass[type] = value;
+        }
+        public bool ContainsFastReflectClass(Type type) {
+            return m_FastReflectClass.ContainsKey(type);
+        }
+        public IScorpioFastReflectClass GetFastReflectClass(Type type) {
+            return m_FastReflectClass[type];
         }
         internal void SetStackInfo(StackInfo info)
         {
             m_StackInfo = info;
         }
+        public StackInfo GetCurrentStackInfo()
+        {
+            return m_StackInfo;
+        }
         internal void PushStackInfo()
         {
             m_StackInfoStack.Add(m_StackInfo);
+        }
+        public void ClearStackInfo()
+        {
+            m_StackInfoStack.Clear();
         }
         public string GetStackInfo()
         {
@@ -129,10 +213,16 @@ namespace Scorpio
             m_StackInfoStack.Clear();
             return obj.Call(parameters);
         }
+		public object Call(String strName, ScriptObject[] args) {
+			ScriptObject obj = m_GlobalTable.GetValue(strName);
+			if (obj is ScriptNull) throw new ScriptException("找不到变量[" + strName + "]");
+			m_StackInfoStack.Clear();
+			return obj.Call(args);
+		}
         public ScriptObject CreateObject(object value)
         {
             if (value == null)
-                return ScriptNull.Instance;
+                return Null;
             else if (value is ScriptObject)
                 return (ScriptObject)value;
             else if (value is ScorpioFunction)
@@ -153,7 +243,7 @@ namespace Scorpio
         }
         public ScriptBoolean CreateBool(bool value)
         {
-            return ScriptBoolean.Get(value);
+            return GetBoolean(value);
         }
         public ScriptString CreateString(string value)
         {
@@ -170,6 +260,10 @@ namespace Scorpio
         public ScriptNumber CreateLong(long value)
         {
             return new ScriptNumberLong(this, value);
+        }
+        public ScriptNumber CreateInt(int value)
+        {
+            return new ScriptNumberInt(this, value);
         }
         public ScriptEnum CreateEnum(object value)
         {
@@ -203,19 +297,19 @@ namespace Scorpio
         {
             return new ScriptFunction(this, value);
         }
-        public void LoadLibrary()
-        {
-            m_UserdataFactory = new DefaultScriptUserdataFactory(this);
-            m_GlobalTable = CreateTable();
-            m_GlobalTable.SetValue(GLOBAL_TABLE, m_GlobalTable);
-            m_GlobalTable.SetValue(GLOBAL_VERSION, CreateString(Version));
-            PushAssembly(Util.MSCORLIB_ASSEMBLY);
-            PushAssembly(GetType().Assembly);
+        public IScriptUserdataFactory GetUserdataFactory() {
+            return m_UserdataFactory;
+        }
+        public void SetUserdataFactory(IScriptUserdataFactory value) {
+            m_UserdataFactory = value;
+        }
+        public void LoadLibrary() {
             LibraryBasis.Load(this);
             LibraryArray.Load(this);
             LibraryString.Load(this);
             LibraryTable.Load(this);
             LibraryJson.Load(this);
+            LibraryMath.Load(this);
         }
     }
 }

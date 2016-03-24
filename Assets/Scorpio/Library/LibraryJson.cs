@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
+﻿using Scorpio;
 namespace Scorpio.Library
 {
     public class LibraryJson
@@ -29,7 +26,7 @@ namespace Scorpio.Library
             }
             public object Call(ScriptObject[] args)
             {
-                return m_Script.LoadString("return " + args[0].ToString());
+                return m_Script.LoadString(null, "return " + args[0].ToString(), null, false);
             }
         }
     }

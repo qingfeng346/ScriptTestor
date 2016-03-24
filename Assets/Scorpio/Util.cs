@@ -1,7 +1,7 @@
 ﻿using System;
+using System.Reflection;
 using System.Collections.Generic;
 using System.Text;
-using System.Reflection;
 using System.IO;
 using Scorpio;
 using Scorpio.Variable;
@@ -27,7 +27,6 @@ namespace Scorpio
         private static readonly Type TYPE_DOUBLE = typeof(double);
         private static readonly Type TYPE_DECIMAL = typeof(decimal);
         private static readonly Type TYPE_PARAMATTRIBUTE = typeof(ParamArrayAttribute);
-        public static readonly Assembly MSCORLIB_ASSEMBLY = TYPE_OBJECT.Assembly;
 
         public static void SetObject(Dictionary<object, ScriptObject> variables, object key, ScriptObject obj)
         {
@@ -61,9 +60,8 @@ namespace Scorpio
                     type == TYPE_FLOAT || type == TYPE_DOUBLE ||
                     type == TYPE_DECIMAL || type == TYPE_LONG);
         }
-        public static bool IsEnum(Type type)
-        {
-            return type.IsEnum;
+        public static bool IsEnum(Type type) {
+            return ScriptExtensions.IsEnum(type);
         }
         public static bool IsDelegateType(Type type)
         {
@@ -93,6 +91,10 @@ namespace Scorpio
         {
             return obj is long;
         }
+        public static bool IsIntObject(object obj)
+        {
+            return obj is int;
+        }
         public static bool IsNumberObject(object obj)
         {
             return (obj is sbyte || obj is byte ||
@@ -109,8 +111,7 @@ namespace Scorpio
         {
             return info.IsDefined(TYPE_PARAMATTRIBUTE, false);
         }
-
-        public static object ChangeType(ScriptObject par, Type type)
+        public static object ChangeType(Script script, ScriptObject par, Type type)
         {
             if (type == TYPE_OBJECT) {
                 return par.ObjectValue;
@@ -119,7 +120,12 @@ namespace Scorpio
                     return ((ScriptUserdata)par).ValueType;
                 else if (par is ScriptNumber)
                     return ChangeType_impl(par.ObjectValue, type);
-                else
+                else if (Util.IsDelegateType(type)) {
+                    if (par is ScriptFunction)
+                        return script.GetUserdataFactory().GetDelegate(type).Call(new ScriptObject[] { par });
+                    else
+                        return par.ObjectValue;
+                } else
                     return par.ObjectValue;
             }
         }
@@ -135,36 +141,44 @@ namespace Scorpio
         }
         public static bool CanChangeType(ScriptObject par, Type type)
         {
-            if (type == TYPE_OBJECT || par.IsNull) {
+            if (type == TYPE_OBJECT)
                 return true;
-            } else {
-                if (par is ScriptString && Util.IsString(type)) {
-                    return true;
-                } else if (par is ScriptNumber && IsNumber(type)) {
-                    return true;
-                } else if (par is ScriptBoolean && IsBool(type)) {
-                    return true;
-                } else if (par is ScriptEnum && (par as ScriptEnum).EnumType == type) {
-                    return true;
-                } else if (par is ScriptFunction && IsDelegateType(type)) {
-                    return true;
-                } else if (par is ScriptUserdata) {
-                    if (Util.IsType(type) || type.IsAssignableFrom(((ScriptUserdata)par).ValueType))
-                        return true;
-                } else if (type.IsAssignableFrom(par.GetType())) {
-                    return true;
-                }
-            }
-            return false;
+            else if (IsNumber(type))
+                return par is ScriptNumber;
+            else if (IsBool(type))
+                return par is ScriptBoolean;
+            else if (IsEnum(type))
+                return par is ScriptEnum && ((ScriptEnum)par).EnumType == type;
+            else if (par is ScriptNull)
+                return true;
+            else if (IsString(type))
+                return par is ScriptString;
+            else if (IsDelegateType(type))
+                return (par is ScriptFunction) || (par is ScriptUserdata && (par as ScriptUserdata).ValueType == type);
+            else if (IsType(type))
+                return par is ScriptUserdata;
+            else if (par is ScriptUserdata)
+                return type.IsAssignableFrom(((ScriptUserdata)par).ValueType);
+            else
+                return type.IsAssignableFrom(par.GetType());
         }
-        public static String GetFileString(String fileName, Encoding encoding)
+        public static void WriteString(BinaryWriter writer, string str)
         {
-            FileStream stream = File.OpenRead(fileName);
-            long length = stream.Length;
-            byte[] buffer = new byte[length];
-            stream.Read(buffer, 0, buffer.Length);
-            stream.Close();
-            return encoding.GetString(buffer, 0, buffer.Length);
+            if (string.IsNullOrEmpty(str)) {
+                writer.Write((byte)0);
+            } else {
+                writer.Write(Encoding.UTF8.GetBytes(str));
+                writer.Write((byte)0);
+            }
+        }
+        public static string ReadString(BinaryReader reader)
+        {
+            List<byte> sb = new List<byte>();
+            byte ch;
+            while ((ch = reader.ReadByte()) != 0)
+                sb.Add(ch);
+            byte[] buffer = sb.ToArray();
+            return Encoding.UTF8.GetString(buffer, 0, buffer.Length);
         }
         public static bool IsNullOrEmpty(String str)
         {
@@ -174,13 +188,9 @@ namespace Scorpio
         {
             return Convert.ChangeType(value, conversionType);
         }
-        public static void Assert(bool b)
+        public static void Assert(bool b, Script script, string message)
         {
-            Assert(b, "");
-        }
-        public static void Assert(bool b, string message)
-        {
-            if (!b) throw new ExecutionException(message);
+            if (!b) throw new ExecutionException(script, message);
         }
         public static int ToInt32(object value)
         {

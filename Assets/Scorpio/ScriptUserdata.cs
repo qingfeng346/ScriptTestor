@@ -1,9 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Reflection;
-using Scorpio.Variable;
-using Scorpio.Exception;
 namespace Scorpio
 {
     //语言数据

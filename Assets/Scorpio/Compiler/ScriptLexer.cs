@@ -10,22 +10,27 @@ namespace Scorpio.Compiler
     {
         private LexState m_lexState;                //当前解析状态
         private String m_strToken = null;           //字符串token
+        private int m_iCacheLine;                   //解析@字符串的时候记录其实行数
         private int m_iSourceLine;                  //当前解析行数
         private int m_iSourceChar;                  //当前解析字符
         private String m_strBreviary;               //字符串的摘要 取第一行字符串的前20个字符
         private List<String> m_listSourceLines;     //所有行
         private List<Token> m_listTokens;           //解析后所得Token
         private char ch;                            //当前的解析的字符
-        public ScriptLexer(String buffer)
+		public ScriptLexer(String buffer, String strBreviary)
         {
             m_listSourceLines = new List<string>();
             m_listTokens = new List<Token>();
-            String strSource = buffer.Replace("\r\n", "\r");
-            string[] strLines = strSource.Split('\r');
-            m_strBreviary = strLines.Length > 0 ? strLines[0] : "";
-            if (m_strBreviary.Length > BREVIARY_CHAR) m_strBreviary = m_strBreviary.Substring(0, BREVIARY_CHAR);
+            string[] strLines = buffer.Split('\n');
+			if (Util.IsNullOrEmpty (strBreviary)) {
+				m_strBreviary = strLines.Length > 0 ? strLines [0] : "";
+				if (m_strBreviary.Length > BREVIARY_CHAR)
+					m_strBreviary = m_strBreviary.Substring (0, BREVIARY_CHAR);
+			} else {
+				m_strBreviary = strBreviary;
+			}
             foreach (String strLine in strLines)
-                m_listSourceLines.Add(strLine + "\r\n");
+                m_listSourceLines.Add(strLine + '\n');
             m_iSourceLine = 0;
             m_iSourceChar = 0;
             lexState = LexState.None;
@@ -218,7 +223,7 @@ namespace Scorpio.Compiler
                         if (ch == '=') {
                             AddToken(TokenType.AssignModulo, "%=");
                         } else {
-                            AddToken(TokenType.AssignModulo, "%");
+                            AddToken(TokenType.Modulo, "%");
                             UndoChar();
                         }
                         break;
@@ -341,7 +346,8 @@ namespace Scorpio.Compiler
                             m_strToken += '\n';
                             lexState = LexState.String;
                         } else {
-                            ThrowInvalidCharacterException(ch);
+                            m_strToken += ch;
+                            lexState = LexState.String;
                         }
                         break;
                     case LexState.SingleString:
@@ -369,13 +375,16 @@ namespace Scorpio.Compiler
                             m_strToken += '\n';
                             lexState = LexState.SingleString;
                         } else {
-                            ThrowInvalidCharacterException(ch);
+                            m_strToken += ch;
+                            lexState = LexState.SingleString;
                         }
                         break;
                     case LexState.SimpleStringStart:
                         if (ch == '\"') {
+                            m_iCacheLine = m_iSourceLine;
                             lexState = LexState.SimpleString;
                         } else if (ch == '\'') {
+                            m_iCacheLine = m_iSourceLine;
                             lexState = LexState.SingleSimpleString;
                         } else {
                             ThrowInvalidCharacterException(ch);
@@ -393,7 +402,8 @@ namespace Scorpio.Compiler
                             m_strToken += '\"';
                             lexState = LexState.SimpleString;
                         } else {
-                            AddToken(TokenType.String, m_strToken);
+                            m_listTokens.Add(new Token(TokenType.SimpleString, m_strToken, m_iCacheLine, m_iSourceChar));
+                            lexState = LexState.None;
                             UndoChar();
                         }
                         break;
@@ -409,7 +419,8 @@ namespace Scorpio.Compiler
                             m_strToken += '\'';
                             lexState = LexState.SingleSimpleString;
                         } else {
-                            AddToken(TokenType.String, m_strToken);
+                            m_listTokens.Add(new Token(TokenType.SimpleString, m_strToken, m_iCacheLine, m_iSourceChar));
+                            lexState = LexState.None;
                             UndoChar();
                         }
                         break;

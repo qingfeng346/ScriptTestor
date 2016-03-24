@@ -1,9 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using Scorpio.CodeDom;
 using Scorpio.Exception;
-
+using Scorpio.Compiler;
 namespace Scorpio
 {
     public enum ObjectType
@@ -21,46 +18,52 @@ namespace Scorpio
     //脚本数据类型
     public abstract class ScriptObject
     {
-        private static readonly ScriptObject[] NOPARAMETER = new ScriptObject[0];       // 没有参数
-        public virtual ScriptObject Assign() { return this; }                           // 赋值
+        // 无参                            
+        private static readonly ScriptObject[] NOPARAMETER = new ScriptObject[0];
+        // Object名字
+        public String Name { get; set; }
+        // 赋值
+        public virtual ScriptObject Assign() { return this; }                           
         //设置变量
-        public virtual void SetValue(int key, ScriptObject value) { throw new ExecutionException("类型[" + Type + "]不支持设置变量(int)"); }
+        public virtual void SetValue(object key, ScriptObject value) { throw new ExecutionException(Script, "类型[" + Type + "]不支持设置变量"); }
         //获取变量
-        public virtual ScriptObject GetValue(int key) { throw new ExecutionException("类型[" + Type + "]不支持获取变量(int)"); }
-        //设置变量
-        public virtual void SetValue(string key, ScriptObject value) { throw new ExecutionException("类型[" + Type + "]不支持设置变量(string)"); }
-        //获取变量
-        public virtual ScriptObject GetValue(string key) { throw new ExecutionException("类型[" + Type + "]不支持获取变量(string)"); }
-        //设置变量
-        public virtual void SetValue(object key, ScriptObject value) { throw new ExecutionException("类型[" + Type + "]不支持设置变量(object)"); }
-        //获取变量
-        public virtual ScriptObject GetValue(object key) { throw new ExecutionException("类型[" + Type + "]不支持获取变量(object)"); }
-
-        public void SetValueInternal(object key, ScriptObject value)
+        public virtual ScriptObject GetValue(object key) { throw new ExecutionException(Script, "类型[" + Type + "]不支持获取变量"); }
+        public object call(params object[] args)
         {
-            if (key is string)
-                SetValue((string)key, value);
-            else if (key is int || key is double)
-                SetValue(Util.ToInt32(key), value);
-            else
-                SetValue(key, value);
-        }
-        public ScriptObject GetValueInternal(object key)
-        {
-            if (key is string)
-                return GetValue((string)key);
-            else if (key is int || key is double)
-                return GetValue(Util.ToInt32(key));
-            else
-                return GetValue(key);
+            int length = args.Length;
+            ScriptObject[] parameters = new ScriptObject[length];
+            for (int i = 0; i < length; ++i) parameters[i] = Script.CreateObject(args[i]);
+            return Call(parameters);
         }
         //调用无参函数
         public object Call() { return Call(NOPARAMETER); }
         //调用函数
-        public virtual object Call(ScriptObject[] parameters) { throw new ExecutionException("类型[" + Type + "]不支持函数调用"); }
-        public virtual ScriptObject Clone() { return this; }                            // 复制一个变量
-        public virtual string ToJson() { return ObjectValue.ToString(); }               // ToJson
-        public override string ToString() { return ObjectValue.ToString(); }            // ToString
+        public virtual object Call(ScriptObject[] parameters) { throw new ExecutionException(Script, "类型[" + Type + "]不支持函数调用"); }
+        //两个数值比较 > >= < <=
+        public virtual bool Compare(TokenType type, ScriptObject obj) { throw new ExecutionException(Script, "类型[" + Type + "]不支持值比较"); }
+        //运算符或者位运算 + - * / % | & ^ >> <<
+        public virtual ScriptObject Compute(TokenType type, ScriptObject obj) { throw new ExecutionException(Script, "类型[" + Type + "]不支持运算符"); }
+        //运算符或者位运算赋值运算 += -= *= /= %= |= &= ^= >>= <<=
+        public virtual ScriptObject AssignCompute(TokenType type, ScriptObject obj) { throw new ExecutionException(Script, "类型[" + Type + "]不支持赋值运算符"); }
+        //逻辑运算符 逻辑运算时 Object 算 true 或者 false
+        public virtual bool LogicOperation() { return true; }
+        // 复制一个变量
+        public virtual ScriptObject Clone() { return this; }
+        // ToJson
+        public virtual string ToJson() { return ObjectValue.ToString(); }
+        // ToString
+        public override string ToString() { return ObjectValue.ToString(); }
+        // Equals
+        public override bool Equals(object obj) {                                       
+            if (obj == null) return false;
+            if (!(obj is ScriptObject)) return false;
+            if (ObjectValue == this) return obj == this;
+            return ObjectValue.Equals(((ScriptObject)obj).ObjectValue);
+        }
+        // GetHashCode
+        public override int GetHashCode() {                                             
+            return base.GetHashCode();
+        }
         public ScriptObject(Script script) { Script = script; }                         // 构图函数
         public Script Script { get; protected set; }                                    // 所在脚本对象
         public abstract ObjectType Type { get; }                                        // 变量类型
