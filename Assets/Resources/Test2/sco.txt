@@ -1,5 +1,5 @@
 GameObject = import_type("UnityEngine.GameObject")
-for (var i=0;i<=10000;++i)
+for (var i=0,10000)
 {
     var a = GameObject("123123")
     GameObject.Destroy(a)
