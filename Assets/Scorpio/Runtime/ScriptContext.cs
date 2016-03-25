@@ -8,6 +8,8 @@ using Scorpio.Exception;
 namespace Scorpio.Runtime
 {
     //执行命令
+    //注意事项:
+    //所有调用另一个程序集的地方 都要new一个新的 否则递归调用会相互影响
     public class ScriptContext
     {
         private Script m_script;                                            //脚本类
@@ -88,6 +90,14 @@ namespace Scorpio.Runtime
                 ret = (obj == null ? m_script.GetValue(name) : obj);
             } else {
                 ret = ResolveOperand(member.Parent);
+                /*此处设置一下堆栈位置 否则 函数返回值取值出错会报错位置 例如  
+                    function Get() { 
+                        return null 
+                    } 
+                    Get().a
+                    
+                上述代码报错会报道 return null 那一行 但实际出错 是 .a 的时候 下面这句话就是把堆栈设置回 .a 那一行
+                */
                 m_script.SetStackInfo(member.StackInfo);
                 ret = ret.GetValue(GetMember(member));
             }
@@ -410,7 +420,9 @@ namespace Scorpio.Runtime
         }
         ScriptObject ParseScriptObject(CodeScriptObject obj)
         {
-            return obj.Object.Clone();
+            //此处原先使用Clone 是因为 number 和 string 有自运算的操作 会影响常量 但是现在设置变量会调用Assign() 基础类型会自动复制一次 所以去掉clone
+            return obj.Object;
+            //return obj.Object.Clone();
         }
         ScriptObject ParseRegion(CodeRegion region)
         {
@@ -465,6 +477,16 @@ namespace Scorpio.Runtime
                 ScriptObject right = ResolveOperand(operate.Right);
                 if (left is ScriptString || right is ScriptString) { return m_script.CreateString(left.ToString() + right.ToString()); }
                 return left.Compute(type, right);
+            case TokenType.Minus:
+            case TokenType.Multiply:
+            case TokenType.Divide:
+            case TokenType.Modulo:
+            case TokenType.InclusiveOr:
+            case TokenType.Combine:
+            case TokenType.XOR:
+            case TokenType.Shr:
+            case TokenType.Shi:
+                return left.Compute(type, ResolveOperand(operate.Right));
             case TokenType.And:
                 if (!left.LogicOperation()) return m_script.False;
                 return m_script.GetBoolean(ResolveOperand(operate.Right).LogicOperation());
@@ -481,7 +503,7 @@ namespace Scorpio.Runtime
             case TokenType.LessOrEqual:
                 return m_script.GetBoolean(left.Compare(type, ResolveOperand(operate.Right)));
             default:
-                return left.Compute(type, ResolveOperand(operate.Right));
+                throw new ExecutionException(m_script, "不支持的运算符 " + type);
             }
         }
         ScriptObject ParseTernary(CodeTernary ternary)
