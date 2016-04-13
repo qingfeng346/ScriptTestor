@@ -5,6 +5,7 @@ using System.Reflection;
 using Scorpio;
 using Scorpio.Exception;
 using Scorpio.Variable;
+using Scorpio.Function;
 namespace Scorpio.Library
 {
     public class LibraryBasis
@@ -12,7 +13,7 @@ namespace Scorpio.Library
         private class ArrayPairs : ScorpioHandle
         {
             Script m_Script;
-            List<ScriptObject>.Enumerator m_Enumerator;
+            ScriptArray.Enumerator m_Enumerator;
             int m_Index = 0;
             public ArrayPairs(Script script, ScriptArray obj)
             {
@@ -33,7 +34,7 @@ namespace Scorpio.Library
         }
         private class ArrayKPairs : ScorpioHandle
         {
-            List<ScriptObject>.Enumerator m_Enumerator;
+            ScriptArray.Enumerator m_Enumerator;
             int m_Index = 0;
             public ArrayKPairs(ScriptArray obj)
             {
@@ -49,7 +50,7 @@ namespace Scorpio.Library
         }
         private class ArrayVPairs : ScorpioHandle
         {
-            List<ScriptObject>.Enumerator m_Enumerator;
+            ScriptArray.Enumerator m_Enumerator;
             public ArrayVPairs(ScriptArray obj)
             {
                 m_Enumerator = obj.GetIterator();
@@ -159,6 +160,8 @@ namespace Scorpio.Library
             script.SetObjectInternal("require", script.CreateFunction(new require(script)));
             script.SetObjectInternal("import", script.CreateFunction(new require(script)));
             script.SetObjectInternal("using", script.CreateFunction(new require(script)));
+            script.SetObjectInternal("push_search", script.CreateFunction(new push_search(script)));
+            script.SetObjectInternal("push_define", script.CreateFunction(new push_define(script)));
 
             script.SetObjectInternal("load_assembly", script.CreateFunction(new load_assembly(script)));
             script.SetObjectInternal("load_assembly_safe", script.CreateFunction(new load_assembly_safe(script)));
@@ -427,6 +430,30 @@ namespace Scorpio.Library
                 return m_script.LoadSearchPathFile(str.Value);
             }
         }
+        private class push_search : ScorpioHandle {
+            private Script m_script;
+            public push_search(Script script) {
+                m_script = script;
+            }
+            public object Call(ScriptObject[] args) {
+                ScriptString str = args[0] as ScriptString;
+                Util.Assert(str != null, m_script, "push_search 参数必须是 string");
+                m_script.PushSearchPath(str.Value);
+                return null;
+            }
+        }
+        private class push_define : ScorpioHandle {
+            private Script m_script;
+            public push_define(Script script) {
+                m_script = script;
+            }
+            public object Call(ScriptObject[] args) {
+                ScriptString str = args[0] as ScriptString;
+                Util.Assert(str != null, m_script, "push_define 参数必须是 string");
+                m_script.PushDefine(str.Value);
+                return null;
+            }
+        }
         private class load_assembly : ScorpioHandle
         {
             private Script m_script;
@@ -517,10 +544,9 @@ namespace Scorpio.Library
             }
             public object Call(ScriptObject[] args)
             {
-                ScriptFunction func = args[0] as ScriptFunction;
+                ScriptMethodFunction func = args[0] as ScriptMethodFunction;
                 Util.Assert(func != null, m_script, "generic_method 第1个参数必须是 function");
                 ScorpioMethod method = func.Method;
-                Util.Assert(method != null, m_script, "generic_method 第1个参数必须是 程序函数");
                 Type[] types = new Type[args.Length - 1];
                 for (int i = 1; i < args.Length; ++i) {
                     ScriptUserdata type = args[i] as ScriptUserdata;

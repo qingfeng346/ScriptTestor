@@ -5,6 +5,7 @@ using Scorpio.Compiler;
 using Scorpio.CodeDom;
 using Scorpio.CodeDom.Temp;
 using Scorpio.Exception;
+using Scorpio.Function;
 namespace Scorpio.Runtime
 {
     //执行命令
@@ -88,6 +89,7 @@ namespace Scorpio.Runtime
                 string name = (string)member.MemberValue;
                 ScriptObject obj = GetVariableObject(name);
                 ret = (obj == null ? m_script.GetValue(name) : obj);
+                ret.Name = name;
             } else {
                 ret = ResolveOperand(member.Parent);
                 /*此处设置一下堆栈位置 否则 函数返回值取值出错会报错位置 例如  
@@ -113,7 +115,6 @@ namespace Scorpio.Runtime
         {
             if (member.Parent == null) {
                 string name = (string)member.MemberValue;
-                variable.Name = name;
                 if (!SetVariableObject(name, variable))
                     m_script.SetObjectInternal(name, variable);
             } else {
@@ -258,7 +259,7 @@ namespace Scorpio.Runtime
                 ProcessCondition(code.If);
                 return;
             }
-            foreach (var ElseIf in code.ElseIf) {
+            foreach (TempCondition ElseIf in code.ElseIf) {
                 if (ProcessAllow(ElseIf)) {
                     ProcessCondition(ElseIf);
                     return;
@@ -430,7 +431,7 @@ namespace Scorpio.Runtime
         }
         ScriptFunction ParseFunction(CodeFunction func)
         {
-            return ((ScriptFunction)func.Func.Clone()).SetParentContext(this);
+            return func.Func.Create().SetParentContext(this);
         }
         void ParseCallBlock(CodeCallBlock block) {
             new ScriptContext(m_script, block.Executable, this).Execute();
@@ -451,7 +452,7 @@ namespace Scorpio.Runtime
         ScriptArray ParseArray(CodeArray array)
         {
             ScriptArray ret = m_script.CreateArray();
-            foreach (var ele in array.Elements) {
+            foreach (CodeObject ele in array.Elements) {
                 ret.Add(ResolveOperand(ele));
             }
             return ret;
@@ -462,7 +463,7 @@ namespace Scorpio.Runtime
             foreach (CodeTable.TableVariable variable in table.Variables) {
                 ret.SetValue(variable.key, ResolveOperand(variable.value));
             }
-            foreach (ScriptFunction func in table.Functions) {
+            foreach (ScriptScriptFunction func in table.Functions) {
                 func.SetTable(ret);
                 ret.SetValue(func.Name, func);
             }
