@@ -20,19 +20,19 @@ namespace Scorpio
         }
         public override ScriptObject GetValue(object key)
         {
-            return m_listObject.ContainsKey(key) ? m_listObject[key] : Script.Null;
+            return m_listObject.ContainsKey(key) ? m_listObject[key] : m_Script.Null;
         }
         public override ScriptObject AssignCompute(TokenType type, ScriptObject value) {
             if (type != TokenType.AssignPlus) { return base.AssignCompute(type, value); }
             ScriptTable table = value as ScriptTable;
-            if (table == null) throw new ExecutionException(Script, "table [+=] 操作只支持两个table " + value.Type);
+            if (table == null) throw new ExecutionException(m_Script, "table [+=] 操作只支持两个table " + value.Type);
             ScriptObject obj = null;
             ScriptScriptFunction func = null;
             foreach (KeyValuePair<object, ScriptObject> pair in table.m_listObject) {
                 obj = pair.Value.Clone();
                 if (obj is ScriptScriptFunction) {
                     func = (ScriptScriptFunction)obj;
-                    if (!func.IsStatic) func.SetTable(this);
+                    if (!func.IsStaticFunction) func.SetTable(this);
                 }
                 m_listObject[pair.Key] = obj;
             }
@@ -41,15 +41,15 @@ namespace Scorpio
         public override ScriptObject Compute(TokenType type, ScriptObject value) {
             if (type != TokenType.Plus) { return base.Compute(type, value); }
             ScriptTable table = value as ScriptTable;
-            if (table == null) throw new ExecutionException(Script, "table [+] 操作只支持两个table " + value.Type);
-            ScriptTable ret = Script.CreateTable();
+            if (table == null) throw new ExecutionException(m_Script, "table [+] 操作只支持两个table " + value.Type);
+            ScriptTable ret = m_Script.CreateTable();
             ScriptObject obj = null;
             ScriptScriptFunction func = null;
             foreach (KeyValuePair<object, ScriptObject> pair in m_listObject) {
                 obj = pair.Value.Clone();
                 if (obj is ScriptScriptFunction) {
                     func = (ScriptScriptFunction)obj;
-                    if (!func.IsStatic) func.SetTable(ret);
+                    if (!func.IsStaticFunction) func.SetTable(ret);
                 }
                 ret.m_listObject[pair.Key] = obj;
             }
@@ -57,7 +57,7 @@ namespace Scorpio
                 obj = pair.Value.Clone();
                 if (obj is ScriptScriptFunction) {
                     func = (ScriptScriptFunction)obj;
-                    if (!func.IsStatic) func.SetTable(ret);
+                    if (!func.IsStaticFunction) func.SetTable(ret);
                 }
                 ret.m_listObject[pair.Key] = obj;
             }
@@ -80,14 +80,14 @@ namespace Scorpio
             m_listObject.Remove(key);
         }
 		public ScriptArray GetKeys() {
-			ScriptArray ret = Script.CreateArray ();
+			ScriptArray ret = m_Script.CreateArray ();
 			foreach (KeyValuePair<object, ScriptObject> pair in m_listObject) {
-				ret.Add(Script.CreateObject(pair.Key));
+				ret.Add(m_Script.CreateObject(pair.Key));
 			}
 			return ret;
 		}
 		public ScriptArray GetValues() {
-			ScriptArray ret = Script.CreateArray ();
+			ScriptArray ret = m_Script.CreateArray ();
 			foreach (KeyValuePair<object, ScriptObject> pair in m_listObject) {
 				ret.Add(pair.Value.Assign());
 			}
@@ -97,7 +97,7 @@ namespace Scorpio
             return m_listObject.GetEnumerator();
         }
         public override ScriptObject Clone() {
-            ScriptTable ret = Script.CreateTable();
+            ScriptTable ret = m_Script.CreateTable();
             ScriptObject obj = null;
             ScriptScriptFunction func = null;
             foreach (KeyValuePair<object, ScriptObject> pair in m_listObject) {
@@ -107,7 +107,7 @@ namespace Scorpio
                     obj = pair.Value.Clone();
                     if (obj is ScriptScriptFunction) {
                         func = (ScriptScriptFunction)obj;
-                        if (!func.IsStatic) func.SetTable(ret);
+                        if (!func.IsStaticFunction) func.SetTable(ret);
                     }
                     ret.m_listObject[pair.Key] = obj;
                 }

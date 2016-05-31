@@ -4,9 +4,25 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using Scorpio;
 using Scorpio.Exception;
-namespace Scorpio.Userdata
-{
+namespace Scorpio.Userdata {
+    public class ScorpioMethodInfo {
+        public string Name;
+        public bool IsStatic;
+        public Type[] ParameterType;
+        public bool Params;
+        public Type ParamType;
+        public string ParameterTypes;
+        public ScorpioMethodInfo(string name, bool isStatic, Type[] parameterType, bool param, Type paramType, string parameterTypes) {
+            this.Name = name;
+            this.IsStatic = isStatic;
+            this.ParameterType = parameterType;
+            this.Params = param;
+            this.ParamType = paramType;
+            this.ParameterTypes = parameterTypes;
+        }
+    }
     /// <summary> 一个类的同名函数 </summary>
     public class UserdataMethod {
         private abstract class FunctionBase {
@@ -15,7 +31,7 @@ namespace Scorpio.Userdata
             public Type ParamType;                      //变长参数类型
             public string ParameterTypes;               //传递参数的类型
             public object[] Args;                       //参数数组（预创建 可以共用）
-            public bool IsValid { get; protected set; }   //是否是有效的函数 (模版函数没有声明的时候就是无效的)
+            public bool IsValid;                        //是否是有效的函数 (模版函数没有声明的时候就是无效的)
             public FunctionBase(Type[] ParameterType, Type ParamType, bool Params, string ParameterTypes) {
                 this.ParameterType = ParameterType;
                 this.ParamType = ParamType;
@@ -30,7 +46,7 @@ namespace Scorpio.Userdata
             public FunctionMethod(MethodInfo Method, Type[] ParameterType, Type ParamType, bool Params, string ParameterTypes) : 
                 base(ParameterType, ParamType, Params, ParameterTypes) {
                 this.Method = Method;
-                IsValid = !Method.IsGenericMethod || !Method.ContainsGenericParameters;
+                this.IsValid = !Method.IsGenericMethod || !Method.ContainsGenericParameters;
             }
             public override object Invoke(object obj, Type type) {
                 return Method.Invoke(obj, Args);
@@ -44,7 +60,7 @@ namespace Scorpio.Userdata
                 this.Constructor = Constructor;
             }
             public override object Invoke(object obj, Type type) {
-                return Constructor.Invoke(obj, Args);
+                return Constructor.Invoke(Args);
             }
         }
         private class FunctionFastMethod : FunctionBase {
@@ -62,15 +78,17 @@ namespace Scorpio.Userdata
         private Type m_Type;                            //所在类型
         private int m_Count;                            //相同名字函数数量
         private FunctionBase[] m_Methods;               //所有函数对象
-        public string MethodName { get; private set; }  //函数名字
-        public bool IsStatic { get; private set; }      //是否是静态函数
+        private string m_MethodName;                    //函数名字
+        private bool m_IsStatic;                        //是否是静态函数
+        public string MethodName { get { return m_MethodName; } }
+        public bool IsStatic { get { return m_IsStatic; } }
         public UserdataMethod() { }
         private UserdataMethod(Script script, Type type, string methodName, List<MethodInfo> methods) {
             m_Script = script;
-            IsStatic = methods[0].IsStatic;
+            m_IsStatic = methods[0].IsStatic;
             List<MethodBase> methodBases = new List<MethodBase>();
             methodBases.AddRange(methods.ToArray());
-            Initialize_impl(type, methodName, methodBases, null);
+            Initialize_impl(type, methodName, methodBases);
         }
         protected void Initialize(Script script, Type type, string methodName, MethodInfo[] methods) {
             m_Script = script;
@@ -79,34 +97,20 @@ namespace Scorpio.Userdata
                 if (method.Name.Equals(methodName))
                     methodBases.Add(method);
             }
-            IsStatic = methodBases.Count > 0 ? methodBases[0].IsStatic : false;
-            Initialize_impl(type, methodName, methodBases, null);
+            m_IsStatic = methodBases.Count > 0 ? methodBases[0].IsStatic : false;
+            Initialize_impl(type, methodName, methodBases);
         }
         protected void Initialize(Script script, Type type, string methodName, ConstructorInfo[] cons) {
             m_Script = script;
-            IsStatic = false;
+            m_IsStatic = false;
             List<MethodBase> methods = new List<MethodBase>();
             methods.AddRange(cons);
-            Initialize_impl(type, methodName, methods, null);
+            Initialize_impl(type, methodName, methods);
         }
-        protected void Initialize(int t, bool isStatic, Script script, Type type, string methodName, MethodInfo[] methods, IScorpioFastReflectMethod fastMethod) {
-            m_Script = script;
-            IsStatic = isStatic;
-            List<MethodBase> methodBases = new List<MethodBase>();
-            if (t == 0) {
-                methodBases.AddRange(type.GetConstructors());
-            } else {
-                foreach (MethodInfo method in methods) {
-                    if (method.Name.Equals(methodName))
-                        methodBases.Add(method);
-                }
-            }
-            Initialize_impl(type, methodName, methodBases, fastMethod);
-        }
-        private void Initialize_impl(Type type, string methodName, List<MethodBase> methods, IScorpioFastReflectMethod fastMethod)
+        private void Initialize_impl(Type type, string methodName, List<MethodBase> methods)
         {
             m_Type = type;
-            MethodName = methodName;
+            m_MethodName = methodName;
             List<FunctionBase> functionMethod = new List<FunctionBase>();
             bool Params = false;
             Type ParamType = null;
@@ -127,9 +131,7 @@ namespace Scorpio.Userdata
                     Params = Util.IsParamArray(par);
                     if (Params) ParamType = par.ParameterType.GetElementType();
                 }
-                if (fastMethod != null && !method.IsGenericMethod)
-                    functionMethod.Add(new FunctionFastMethod(fastMethod, parameters.ToArray(), ParamType, Params, ParameterTypes));
-                else if (method is MethodInfo)
+                if (method is MethodInfo)
                     functionMethod.Add(new FunctionMethod(method as MethodInfo, parameters.ToArray(), ParamType, Params, ParameterTypes));
                 else
                     functionMethod.Add(new FunctionConstructor(method as ConstructorInfo, parameters.ToArray(), ParamType, Params, ParameterTypes));
@@ -137,50 +139,62 @@ namespace Scorpio.Userdata
             m_Methods = functionMethod.ToArray();
             m_Count = m_Methods.Length;
         }
-        public object Call(object obj, ScriptObject[] parameters)
-        {
-            if (m_Count == 0) throw new ExecutionException(m_Script, "找不到函数 [" + MethodName + "]");
+        protected void Initialize(bool isStatic, Script script, Type type, string methodName, ScorpioMethodInfo[] methods, IScorpioFastReflectMethod fastMethod) {
+            m_Script = script;
+            m_IsStatic = isStatic;
+            m_Type = type;
+            m_MethodName = methodName;
+            List<FunctionBase> functionMethod = new List<FunctionBase>();
+            foreach (ScorpioMethodInfo method in methods) {
+                functionMethod.Add(new FunctionFastMethod(fastMethod, method.ParameterType, method.ParamType, method.Params, method.ParameterTypes));
+            }
+            m_Methods = functionMethod.ToArray();
+            m_Count = m_Methods.Length;
+        }
+        public object Call(object obj, ScriptObject[] parameters) {
             FunctionBase methodInfo = null;
-            if (m_Count == 1) {
-                methodInfo = m_Methods[0];
-                if (!methodInfo.IsValid) throw new ExecutionException(m_Script, "Type[" + m_Type.ToString() + "] 找不到合适的函数 [" + MethodName + "]");
-            } else {
-                foreach (FunctionBase method in m_Methods) {
-                    if (method.IsValid && Util.CanChangeType(parameters, method.ParameterType)) {
-                        methodInfo = method;
+            FunctionBase functionBase = null;
+            for (int i = 0; i < m_Count; ++i) {
+                functionBase = m_Methods[i];
+                if (functionBase.IsValid) {
+                    if (functionBase.Params) {
+                        bool fit = true;
+                        int length = functionBase.ParameterType.Length;
+                        int length1 = parameters.Length;
+                        if (length1 >= length - 1) {
+                            for (int j = 0; j < length1; ++j) {
+                                if (!Util.CanChangeType(parameters[j], j >= length - 1 ? functionBase.ParamType : functionBase.ParameterType[j])) {
+                                    fit = false;
+                                    break;
+                                }
+                            }
+                        }
+                        if (fit) {
+                            methodInfo = functionBase;
+                            break;
+                        }
+                    } else if (Util.CanChangeType(parameters, functionBase.ParameterType)) {
+                        methodInfo = functionBase;
                         break;
                     }
                 }
             }
             try {
-                if (methodInfo != null && !methodInfo.Params) {
+                if (methodInfo != null) {
                     int length = methodInfo.ParameterType.Length;
                     object[] objs = methodInfo.Args;
-                    for (int i = 0; i < length; i++)
-                        objs[i] = Util.ChangeType(m_Script, parameters[i], methodInfo.ParameterType[i]);
-                    return methodInfo.Invoke(obj, m_Type);
-                } else {
-                    foreach (FunctionBase method in m_Methods) {
-                        int length = method.ParameterType.Length;
-                        if (method.Params && parameters.Length >= length - 1) {
-                            bool fit = true;
-                            for (int i = 0; i < parameters.Length; ++i) {
-                                if (!Util.CanChangeType(parameters[i], i >= length - 1 ? method.ParamType : method.ParameterType[i])) {
-                                    fit = false;
-                                    break;
-                                }
-                            }
-                            if (fit) {
-                                object[] objs = method.Args;
-                                for (int i = 0; i < length - 1; ++i)
-                                    objs[i] = Util.ChangeType(m_Script, parameters[i], method.ParameterType[i]);
-                                Array array = Array.CreateInstance(method.ParamType, parameters.Length - length + 1);
-                                for (int i = length - 1; i < parameters.Length; ++i)
-                                    array.SetValue(Util.ChangeType(m_Script, parameters[i], method.ParamType), i - length + 1);
-                                objs[length - 1] = array;
-                                return method.Invoke(obj, m_Type);
-                            }
-                        }
+                    if (methodInfo.Params) {
+                        for (int i = 0; i < length - 1; ++i)
+                            objs[i] = Util.ChangeType(m_Script, parameters[i], methodInfo.ParameterType[i]);
+                        Array array = Array.CreateInstance(methodInfo.ParamType, parameters.Length - length + 1);
+                        for (int i = length - 1; i < parameters.Length; ++i)
+                            array.SetValue(Util.ChangeType(m_Script, parameters[i], methodInfo.ParamType), i - length + 1);
+                        objs[length - 1] = array;
+                        return methodInfo.Invoke(obj, m_Type);
+                    } else {
+                        for (int i = 0; i < length; i++)
+                            objs[i] = Util.ChangeType(m_Script, parameters[i], methodInfo.ParameterType[i]);
+                        return methodInfo.Invoke(obj, m_Type);
                     }
                 }
             } catch (System.Exception e) {
@@ -188,8 +202,7 @@ namespace Scorpio.Userdata
             }
             throw new ExecutionException(m_Script, "Type[" + m_Type.ToString() + "] 找不到合适的函数 [" + MethodName + "]");
         }
-        public UserdataMethod MakeGenericMethod(Type[] parameters)
-        {
+        public UserdataMethod MakeGenericMethod(Type[] parameters) {
             List<MethodInfo> methods = new List<MethodInfo>();
             for (int i = 0; i < m_Count; ++i) {
                 FunctionMethod method = m_Methods[i] as FunctionMethod;
@@ -234,8 +247,8 @@ namespace Scorpio.Userdata
         }
     }
     public class FastReflectUserdataMethod : UserdataMethod {
-        public FastReflectUserdataMethod(int t, bool isStatic, Script script, Type type, string methodName, MethodInfo[] methods, IScorpioFastReflectMethod fastMethod) {
-            this.Initialize(t, isStatic, script, type, methodName, methods, fastMethod);
+        public FastReflectUserdataMethod(bool isStatic, Script script, Type type, string methodName, ScorpioMethodInfo[] methods, IScorpioFastReflectMethod fastMethod) {
+            this.Initialize(isStatic, script, type, methodName, methods, fastMethod);
         }
     }
 }

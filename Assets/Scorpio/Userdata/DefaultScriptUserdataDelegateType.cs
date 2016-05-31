@@ -20,12 +20,12 @@ namespace Scorpio.Userdata
         public static void SetFactory(DelegateTypeFactory factory) { m_Factory = factory; }
         public DefaultScriptUserdataDelegateType(Script script, Type value) : base(script)
         {
-            this.Value = value;
-            this.ValueType = value;
+            this.m_Value = value;
+            this.m_ValueType = value;
         }
         public override object Call(ScriptObject[] parameters)
         {
-            return m_Factory != null ? m_Factory.CreateDelegate(Script, ValueType, parameters[0] as ScriptFunction) : null;
+			return m_Factory != null ? m_Factory.CreateDelegate(m_Script, m_ValueType, parameters[0] as ScriptFunction) : null;
         }
     }
 #else
@@ -65,8 +65,8 @@ namespace Scorpio.Userdata
         private DynamicMethod MethodFactory;    //动态函数
         public DefaultScriptUserdataDelegateType(Script script, Type value) : base(script)
         {
-            this.Value = value;
-            this.ValueType = value;
+            this.m_Value = value;
+            this.m_ValueType = value;
             var InvokeMethod = value.GetMethod("Invoke");
             m_DelegateType = value;
             m_ReturnType = InvokeMethod.ReturnType;
@@ -98,7 +98,7 @@ namespace Scorpio.Userdata
         }
         public override object Call(ScriptObject[] parameters)
         {
-            return MethodFactory.CreateDelegate(m_DelegateType, new DynamicDelegate(Script, parameters[0] as ScriptFunction, m_ReturnType));
+            return MethodFactory.CreateDelegate(m_DelegateType, new DynamicDelegate(m_Script, parameters[0] as ScriptFunction, m_ReturnType));
         }
     }
 #endif
