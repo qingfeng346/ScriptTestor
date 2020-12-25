@@ -1,9 +1,0 @@
-int count = 0;
-int a = 3;
-int b = 3434;
-int c = 232323;
-for (int i=0;i<=100000;i++)
-{
-    count = a*4+c*444+b/3+i;
-}
-return count;

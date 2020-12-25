@@ -1,0 +1,31 @@
+GameObject = importType("UnityEngine.GameObject")
+Vector3 = importType("UnityEngine.Vector3")
+UnityUtil = importType("UnityUtil")
+function func1() {
+    var eee = 0
+    for (var i = 0, 1000000) {
+        var a = i + 1
+        var b = 2.3
+        if(a < b) {
+            a = a + 1
+        } else {
+            b = b + 1
+        }
+        if(a == b){
+            b = b + 1
+        }
+        eee = eee + a * b + a / b
+    }
+}
+function func2() {
+    var go = new GameObject("a")
+    for (var i = 0, 50000) {
+        go.transform.position = new Vector3(100,100,100)
+    }
+    GameObject.Destroy(go)
+}
+function func3() {
+    for (var i = 0, 50000) {
+        UnityUtil.TestFunc(i, i)
+    }
+}

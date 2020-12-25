@@ -1,8 +1,0 @@
-luanet.load_assembly("System")
-luanet.load_assembly("UnityEngine")
-luanet.load_assembly("Assembly-CSharp")
-GameObject = luanet.import_type("UnityEngine.GameObject")
-for i=0,10000 do
-    local a = GameObject("123123")
-    GameObject.Destroy(a)
-end

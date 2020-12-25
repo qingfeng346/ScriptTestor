@@ -1,8 +1,0 @@
-local count = 0
-local a = 3
-local b = 3434
-local c = 232323
-for i=0,100000 do
-    count = a*4+c*444+b/3+i
-end
-return count

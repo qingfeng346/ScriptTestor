@@ -1,0 +1,31 @@
+GameObject = CS.UnityEngine.GameObject
+UnityUtil = CS.UnityUtil
+Vector3 = CS.UnityEngine.Vector3
+function func1()
+    local eee = 0
+    for i = 0, 1000000 do
+        local a = i + 1
+        local b = 2.3
+        if a < b then
+            a = a + 1
+        else
+            b = b + 1
+        end
+        if a == b then
+            b = b + 1
+        end
+        eee = eee + a * b + a / b
+    end
+end
+function func2()
+    local go = CS.UnityEngine.GameObject("a")
+    for i = 0, 50000 do
+        go.transform.position = Vector3(100,100,100)
+    end
+    CS.UnityEngine.GameObject.Destroy(go)
+end
+function func3()
+    for i = 0, 50000 do
+        UnityUtil.TestFunc(i, i)
+    end
+end
