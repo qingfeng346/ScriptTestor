@@ -32,3 +32,8 @@ function func4() {
         UnityUtil.TestFunc4 = i
     }
 }
+function func5() {
+    for (var i = 0, 50000) {
+        UnityUtil.TestFunc5("1", i)
+    }
+}

@@ -38,5 +38,10 @@ namespace HotFix_Project
                 UnityUtil.TestFunc4 = i;
             }
         }
+        public static void func5() {
+            for (var i = 0; i <= 50000; ++i) {
+                UnityUtil.TestFunc5("1", i);
+            }
+        }
     }
 }

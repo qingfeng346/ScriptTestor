@@ -71,10 +71,15 @@ public class NewBehaviourScript : MonoBehaviour {
     }
     void OnGUI () {
         if (GUI.Button (new Rect (100, 100, 100, 100), "test")) {
-            
+            StartCoroutine(Test());
         }
     }
-    void TestFunc (string func) {
+    IEnumerator Test() {
+        for (var i = 1; i <= 4; ++i) {
+            yield return StartCoroutine(TestFunc("func" + i));
+        }
+    }
+    IEnumerator TestFunc (string func) {
         long luaTime = 0;
         long scoTime = 0;
         long ilTime = 0;
@@ -83,13 +88,21 @@ public class NewBehaviourScript : MonoBehaviour {
             var stop = Stopwatch.StartNew ();
             lua.Global.Get<LuaFunction> (func).Call ();
             luaTime += stop.ElapsedMilliseconds;
-            stop = Stopwatch.StartNew ();
+            yield return null;
+        }
+        for (var i = 0; i < time; ++i) {
+            var stop = Stopwatch.StartNew ();
             sco.call (func);
             scoTime += stop.ElapsedMilliseconds;
-            stop = Stopwatch.StartNew ();
+            yield return null;
+        }
+        for (var i = 0; i < time; ++i) {
+            var stop = Stopwatch.StartNew ();
             appdomain.Invoke ("HotFix_Project.InstanceClass", func, null, null);
             ilTime += stop.ElapsedMilliseconds;
+            yield return null;
         }
-        UnityEngine.Debug.Log ("Lua平均耗时:" + (luaTime / time) + "   Sco平均耗时:" + (scoTime / time) + "   ILRuntime平均耗时:" + (ilTime / time));
+        UnityEngine.Debug.Log ($"测试:{func} Lua平均耗时:" + (luaTime / time) + "   Sco平均耗时:" + (scoTime / time) + "   ILRuntime平均耗时:" + (ilTime / time));
+        yield return new WaitForSeconds(1);
     }
 }

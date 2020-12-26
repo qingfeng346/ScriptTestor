@@ -30,3 +30,8 @@ function func4()
         UnityUtil.TestFunc4 = i
     end
 end
+function func5()
+    for i = 0, 50000 do
+        UnityUtil.TestFunc5("1", i)
+    end
+end

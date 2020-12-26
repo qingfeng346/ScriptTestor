@@ -8,4 +8,10 @@ public static class UnityUtil {
     }
     public static int TestFunc3 = 0;
     public static int TestFunc4 { get; set; }
+    public static void TestFunc5(int a, string b) {
+        
+    }
+    public static void TestFunc5(string a, int b) {
+
+    }
 }
