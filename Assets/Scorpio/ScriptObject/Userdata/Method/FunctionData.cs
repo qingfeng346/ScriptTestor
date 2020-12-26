@@ -105,6 +105,29 @@ namespace Scorpio.Userdata {
             }
             return false;
         }
+        public void SetArgs(ScriptValue[] parameters, int length) {
+            if (IsNormal) {
+                for (var i = 0; i < length; ++i) {
+                    Args[i] = Util.ChangeType(parameters[i], ParameterType[i]);
+                }
+            } else if (IsDefault) {
+                for (var i = 0; i < length; ++i) {
+                    Args[i] = Util.ChangeType(parameters[i], ParameterType[i]);
+                }
+                for (var i = length; i < ParameterCount; ++i) {
+                    Args[i] = DefaultParameter[i];
+                }
+            } else {
+                if (length > ParameterCount) {
+                    var array = Array.CreateInstance(ParamType, length - ParameterCount);
+                    for (int i = ParameterCount; i < length; ++i)
+                        array.SetValue(Util.ChangeType(parameters[i], ParamType), i - ParameterCount);
+                    Args[ParameterCount] = array;
+                } else {
+                    Args[ParameterCount] = Array.CreateInstance(ParamType, 0);
+                }
+            }
+        }
     }
     public abstract class FunctionDataWithRefOut : FunctionData {
         public FunctionDataWithRefOut (Type[] parameterType, object[] defaultParameter, bool[] refOut, int requiredNumber, Type paramType):

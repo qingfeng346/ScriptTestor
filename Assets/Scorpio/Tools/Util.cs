@@ -44,32 +44,41 @@ namespace Scorpio.Tools {
         public static object ChangeType (ScriptValue value, Type type) {
             if (type == TYPE_VALUE) { return value; }
             switch (value.valueType) {
-                case ScriptValue.doubleValueType:
-                    if (type == TYPE_DOUBLE) { return value.Value; }
-                    if (type == TYPE_LONG) { return (long) value.Value; }
-                    if (type == TYPE_ULONG) { return (ulong) value.Value; }
-            goto ToNumber;
-                case ScriptValue.longValueType:
-                    if (type == TYPE_LONG) { return value.Value; }
-                    if (type == TYPE_DOUBLE) { return (double) value.Value; }
-                    if (type == TYPE_ULONG) { return (ulong) value.Value; }
-            ToNumber:
-                    if (type == TYPE_INT) {
-                        return ((IConvertible) value.Value).ToInt32 (null);
-                    } else if (type == TYPE_FLOAT) {
-                        return ((IConvertible) value.Value).ToSingle (null);
-                    } else if (type.IsEnum) {
-                        return Enum.ToObject(type, value.ToInt32());
-                    } else {
-                        throw new System.Exception("其他数字类型请先转换再传入");
+                case ScriptValue.doubleValueType: {
+                    unchecked {
+                        if (type == TYPE_DOUBLE || type == TYPE_OBJECT) { return value.doubleValue; }
+                        if (type == TYPE_LONG) { return (long)value.doubleValue; }
+                        if (type == TYPE_ULONG) { return (ulong)value.doubleValue; }
+                        if (type == TYPE_INT) { return (int)value.doubleValue; }
+                        if (type == TYPE_FLOAT) { return (float)value.doubleValue; }
+                        if (type.IsEnum) { return Enum.ToObject(type, (int)value.doubleValue); }
+                        if (type == TYPE_STRING) { return value.doubleValue.ToString(); }
                     }
-                case ScriptValue.scriptValueType:
-                    {
-                        if (value.scriptValue is ScriptFunction && TYPE_DELEGATE.IsAssignableFrom (type)) {
-                            return ScorpioDelegateFactory.CreateDelegate (type, value.scriptValue);
-                        }
-                        return value.scriptValue.Value;
+                    throw new System.Exception($"其他数字类型请先转换再传入 source:DoubleNumber  target:{type.ToString()}");
+                }
+                case ScriptValue.longValueType: {
+                    unchecked {
+                        if (type == TYPE_LONG || type == TYPE_OBJECT) { return value.longValue; }
+                        if (type == TYPE_DOUBLE) { return (double)value.longValue; }
+                        if (type == TYPE_ULONG) { return (ulong)value.longValue; }
+                        if (type == TYPE_INT) { return (int)value.longValue; }
+                        if (type == TYPE_FLOAT) { return (float)value.longValue; }
+                        if (type.IsEnum) { return Enum.ToObject(type, (int)value.longValue); }
+                        if (type == TYPE_STRING) { return value.longValue.ToString(); }
                     }
+                    throw new System.Exception($"其他数字类型请先转换再传入 source:LongNumber  target:{type.ToString()}");
+                }
+                case ScriptValue.nullValueType: return null;
+                case ScriptValue.trueValueType: return true;
+                case ScriptValue.falseValueType: return false;
+                case ScriptValue.stringValueType: return value.stringValue;
+                case ScriptValue.objectValueType: return value.objectValue;
+                case ScriptValue.scriptValueType: {
+                    if (value.scriptValue is ScriptFunction && TYPE_DELEGATE.IsAssignableFrom (type)) {
+                        return ScorpioDelegateFactory.CreateDelegate (type, value.scriptValue);
+                    }
+                    return value.scriptValue.Value;
+                }
                 default:
                     return value.Value;
             }
@@ -84,15 +93,13 @@ namespace Scorpio.Tools {
                     return type == TYPE_BOOL;
                 case ScriptValue.doubleValueType:
                 case ScriptValue.longValueType:
-                    return type.IsPrimitive;
+                    return type.IsPrimitive && type != TYPE_BOOL;
                 case ScriptValue.stringValueType:
                     return type == TYPE_STRING;
                 case ScriptValue.objectValueType:
                     return type.IsAssignableFrom (value.objectValue.GetType ());
                 default:
-                    {
-                        return TYPE_DELEGATE.IsAssignableFrom (type) ? value.scriptValue is ScriptFunction : type.IsAssignableFrom (value.scriptValue.ValueType);
-                    }
+                    return TYPE_DELEGATE.IsAssignableFrom (type) ? value.scriptValue is ScriptFunction : type.IsAssignableFrom (value.scriptValue.ValueType);
             }
         }
         public static bool CanChangeType (ScriptValue value, Type type) {
@@ -103,7 +110,7 @@ namespace Scorpio.Tools {
                     return type == TYPE_BOOL;
                 case ScriptValue.doubleValueType:
                 case ScriptValue.longValueType:
-                    return type.IsPrimitive;
+                    return type.IsPrimitive && type != TYPE_BOOL;
                 case ScriptValue.stringValueType:
                     return type == TYPE_STRING;
                 case ScriptValue.nullValueType:
@@ -111,9 +118,7 @@ namespace Scorpio.Tools {
                 case ScriptValue.objectValueType:
                     return type.IsAssignableFrom (value.objectValue.GetType ());
                 default:
-                    {
-                        return TYPE_DELEGATE.IsAssignableFrom (type) ? value.scriptValue is ScriptFunction : type.IsAssignableFrom (value.scriptValue.ValueType);
-                    }
+                    return TYPE_DELEGATE.IsAssignableFrom (type) ? value.scriptValue is ScriptFunction : type.IsAssignableFrom (value.scriptValue.ValueType);
             }
         }
         public static string ParseJsonString (string value) {

@@ -35,9 +35,9 @@ public class NewBehaviourScript : MonoBehaviour {
         //工程目录在Assets\Samples\ILRuntime\1.6\Demo\HotFix_Project~
         //以下加载写法只为演示，并没有处理在编辑器切换到Android平台的读取，需要自行修改
 #if UNITY_ANDROID
-        WWW www = new WWW (Application.streamingAssetsPath + "/HotFix_Project.dll");
+        WWW www = new WWW (Application.streamingAssetsPath + "/netstandard2.0/HotFix_Project.dll");
 #else
-        WWW www = new WWW ("file:///" + Application.streamingAssetsPath + "/HotFix_Project.dll");
+        WWW www = new WWW ("file:///" + Application.streamingAssetsPath + "/netstandard2.0/HotFix_Project.dll");
 #endif
         while (!www.isDone)
             yield return null;
@@ -47,20 +47,20 @@ public class NewBehaviourScript : MonoBehaviour {
         www.Dispose ();
 
         //PDB文件是调试数据库，如需要在日志中显示报错的行号，则必须提供PDB文件，不过由于会额外耗用内存，正式发布时请将PDB去掉，下面LoadAssembly的时候pdb传null即可
-#if UNITY_ANDROID
-        www = new WWW (Application.streamingAssetsPath + "/HotFix_Project.pdb");
-#else
-        www = new WWW ("file:///" + Application.streamingAssetsPath + "/HotFix_Project.pdb");
-#endif
-        while (!www.isDone)
-            yield return null;
-        if (!string.IsNullOrEmpty (www.error))
-            UnityEngine.Debug.LogError (www.error);
-        byte[] pdb = www.bytes;
+// #if UNITY_ANDROID
+//         www = new WWW (Application.streamingAssetsPath + "/HotFix_Project.pdb");
+// #else
+//         www = new WWW ("file:///" + Application.streamingAssetsPath + "/HotFix_Project.pdb");
+// #endif
+//         while (!www.isDone)
+//             yield return null;
+//         if (!string.IsNullOrEmpty (www.error))
+//             UnityEngine.Debug.LogError (www.error);
+//         byte[] pdb = www.bytes;
         fs = new MemoryStream (dll);
-        p = new MemoryStream (pdb);
+        // p = new MemoryStream (pdb);
         try {
-            appdomain.LoadAssembly (fs, p, new ILRuntime.Mono.Cecil.Pdb.PdbReaderProvider ());
+            appdomain.LoadAssembly (fs, null, new ILRuntime.Mono.Cecil.Pdb.PdbReaderProvider ());
         } catch { }
 #if DEBUG && (UNITY_EDITOR || UNITY_ANDROID || UNITY_IPHONE)
         //由于Unity的Profiler接口只允许在主线程使用，为了避免出异常，需要告诉ILRuntime主线程的线程ID才能正确将函数运行耗时报告给Profiler
@@ -70,14 +70,8 @@ public class NewBehaviourScript : MonoBehaviour {
         // OnHotFixLoaded();
     }
     void OnGUI () {
-        if (GUI.Button (new Rect (100, 100, 100, 100), "func1")) {
-            TestFunc ("func1");
-        }
-        if (GUI.Button (new Rect (200, 100, 100, 100), "func2")) {
-            TestFunc ("func2");
-        }
-        if (GUI.Button (new Rect (300, 100, 100, 100), "func3")) {
-            TestFunc ("func3");
+        if (GUI.Button (new Rect (100, 100, 100, 100), "test")) {
+            
         }
     }
     void TestFunc (string func) {

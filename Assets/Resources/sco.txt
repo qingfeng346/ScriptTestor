@@ -18,14 +18,17 @@ function func1() {
     }
 }
 function func2() {
-    var go = new GameObject("a")
     for (var i = 0, 50000) {
-        go.transform.position = new Vector3(100,100,100)
+        UnityUtil.TestFunc2(100, 200)
     }
-    GameObject.Destroy(go)
 }
 function func3() {
     for (var i = 0, 50000) {
-        UnityUtil.TestFunc(i, i)
+        UnityUtil.TestFunc3 = i
+    }
+}
+function func4() {
+    for (var i = 0, 50000) {
+        UnityUtil.TestFunc4 = i
     }
 }

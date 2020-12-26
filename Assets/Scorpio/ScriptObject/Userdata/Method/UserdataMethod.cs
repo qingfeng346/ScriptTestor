@@ -41,7 +41,9 @@ namespace Scorpio.Userdata {
                 var methods = isStatic ? m_StaticMethods : m_Methods;
                 var methodLength = methods.Length;
                 if (methodLength == 1) {
-                    return methods[0].Invoke(obj, parameters);
+                    var method = methods[0];
+                    method.SetArgs(parameters, length);
+                    return method.Invoke(obj, parameters);
                 } else {
                     for (var i = 0; i < methodLength; ++i) {
                         var method = methods[i];
@@ -65,7 +67,9 @@ namespace Scorpio.Userdata {
                 var methods = isStatic ? m_StaticMethods : m_Methods;
                 var methodLength = methods.Length;
                 if (methodLength == 1) {
-                    result = methods[0].Invoke (obj, parameters);
+                    var method = methods[0];
+                    method.SetArgs(parameters, length);
+                    result = method.Invoke(obj, parameters);
                     return true;
                 } else {
                     for (var i = 0; i < methodLength; ++i) {
