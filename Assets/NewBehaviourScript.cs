@@ -75,7 +75,7 @@ public class NewBehaviourScript : MonoBehaviour {
         }
     }
     IEnumerator Test() {
-        for (var i = 1; i <= 4; ++i) {
+        for (var i = 1; i <= 5; ++i) {
             yield return StartCoroutine(TestFunc("func" + i));
         }
     }
