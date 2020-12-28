@@ -10,15 +10,15 @@ namespace HotFix_Project
         {
             double eee = 0;
             for (var i = 0; i <= 1000000; ++i) {
-                var a = i + 1;
+                var a = i + 10;
                 var b = 2.3;
                 if (a < b) {
-                    a = a + 1;
+                    a = a + 10;
                 } else {
-                    b = b + 1;
+                    b = b + 10;
                 }
                 if (a == b) {
-                    b = b + 1;
+                    b = b + 10;
                 }
                 eee = eee + a * b + a / b;
             }
