@@ -30,12 +30,14 @@ namespace HotFix_Project
         }
         public static void func3() {
             for (var i = 0; i <= 50000; ++i) {
-                UnityUtil.TestFunc3 = i;
+                var t = UnityUtil.TestFunc3;
+                UnityUtil.TestFunc3 = t;
             }
         }
         public static void func4() {
             for (var i = 0; i <= 50000; ++i) {
-                UnityUtil.TestFunc4 = i;
+                var t = UnityUtil.TestFunc4;
+                UnityUtil.TestFunc4 = t;
             }
         }
         public static void func5() {

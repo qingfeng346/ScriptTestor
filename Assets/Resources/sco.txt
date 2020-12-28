@@ -24,12 +24,14 @@ function func2() {
 }
 function func3() {
     for (var i = 0, 50000) {
-        UnityUtil.TestFunc3 = i
+        var t = UnityUtil.TestFunc3
+        UnityUtil.TestFunc3 = t
     }
 }
 function func4() {
     for (var i = 0, 50000) {
-        UnityUtil.TestFunc4 = i
+        var t = UnityUtil.TestFunc4
+        UnityUtil.TestFunc4 = t
     }
 }
 function func5() {

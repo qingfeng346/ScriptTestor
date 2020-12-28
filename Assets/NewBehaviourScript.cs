@@ -8,6 +8,7 @@ using Scorpio;
 using Scorpio.Userdata;
 using UnityEngine;
 using XLua;
+using System.Text;
 public class NewBehaviourScript : MonoBehaviour {
     // Start is called before the first frame update
     ILRuntime.Runtime.Enviorment.AppDomain appdomain;
@@ -74,35 +75,51 @@ public class NewBehaviourScript : MonoBehaviour {
             StartCoroutine(Test());
         }
     }
-    IEnumerator Test() {
-        for (var i = 1; i <= 5; ++i) {
-            yield return StartCoroutine(TestFunc("func" + i));
-        }
+    IEnumerator Test()
+    {
+        var builder = new StringBuilder();
+        yield return StartCoroutine(TestFunc("脚本自身运算", "func1", builder));
+        yield return StartCoroutine(TestFunc("访问c# 函数", "func2", builder));
+        yield return StartCoroutine(TestFunc("访问c# Field", "func3", builder));
+        yield return StartCoroutine(TestFunc("访问c# Property", "func4", builder));
+        yield return StartCoroutine(TestFunc("访问c# 重载函数", "func5", builder));
+        UnityEngine.Debug.LogWarning(builder.ToString());
     }
-    IEnumerator TestFunc (string func) {
-        long luaTime = 0;
-        long scoTime = 0;
-        long ilTime = 0;
+    IEnumerator TestFunc(string comment, string func, StringBuilder builder) {
+        var scoTime = new List<long>();
+        var luaTime = new List<long>();
+        var ilTime = new List<long>();
         int time = 10;
         for (var i = 0; i < time; ++i) {
             var stop = Stopwatch.StartNew ();
-            lua.Global.Get<LuaFunction> (func).Call ();
-            luaTime += stop.ElapsedMilliseconds;
+            sco.call(func);
+            scoTime.Add(stop.ElapsedMilliseconds);
             yield return null;
         }
         for (var i = 0; i < time; ++i) {
             var stop = Stopwatch.StartNew ();
-            sco.call (func);
-            scoTime += stop.ElapsedMilliseconds;
+            lua.Global.Get<LuaFunction> (func).Call ();
+            luaTime.Add(stop.ElapsedMilliseconds);
             yield return null;
         }
         for (var i = 0; i < time; ++i) {
             var stop = Stopwatch.StartNew ();
             appdomain.Invoke ("HotFix_Project.InstanceClass", func, null, null);
-            ilTime += stop.ElapsedMilliseconds;
+            ilTime.Add(stop.ElapsedMilliseconds);
             yield return null;
         }
-        UnityEngine.Debug.Log ($"测试:{func} Lua平均耗时:" + (luaTime / time) + "   Sco平均耗时:" + (scoTime / time) + "   ILRuntime平均耗时:" + (ilTime / time));
+        var str = $"{comment}  Sco平均耗时:{GetTime(scoTime)}  Lua平均耗时:{GetTime(luaTime)}  ILRuntime平均耗时:{GetTime(ilTime)}";
+        builder.AppendLine(str);
+        UnityEngine.Debug.Log(str);
         yield return new WaitForSeconds(1);
+    }
+    long GetTime(List<long> time)
+    {
+        time.Sort();
+        time.RemoveAt(0);
+        time.RemoveAt(time.Count - 1);
+        long count = 0;
+        time.ForEach(_ => count += _);
+        return count / time.Count;
     }
 }

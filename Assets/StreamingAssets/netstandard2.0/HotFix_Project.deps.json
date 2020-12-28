@@ -11,8 +11,7 @@
         "dependencies": {
           "NETStandard.Library": "2.0.3",
           "Assembly-CSharp": "0.0.0.0",
-          "UnityEngine.CoreModule": "0.0.0.0",
-          "UnityEngine.UIModule": "0.0.0.0"
+          "UnityEngine.CoreModule": "0.0.0.0"
         },
         "runtime": {
           "HotFix_Project.dll": {}
@@ -35,14 +34,6 @@
       "UnityEngine.CoreModule/0.0.0.0": {
         "runtime": {
           "UnityEngine.CoreModule.dll": {
-            "assemblyVersion": "0.0.0.0",
-            "fileVersion": "0.0.0.0"
-          }
-        }
-      },
-      "UnityEngine.UIModule/0.0.0.0": {
-        "runtime": {
-          "UnityEngine.UIModule.dll": {
             "assemblyVersion": "0.0.0.0",
             "fileVersion": "0.0.0.0"
           }
@@ -76,11 +67,6 @@
       "sha512": ""
     },
     "UnityEngine.CoreModule/0.0.0.0": {
-      "type": "reference",
-      "serviceable": false,
-      "sha512": ""
-    },
-    "UnityEngine.UIModule/0.0.0.0": {
       "type": "reference",
       "serviceable": false,
       "sha512": ""
