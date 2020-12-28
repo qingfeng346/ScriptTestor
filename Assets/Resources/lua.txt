@@ -14,26 +14,27 @@ function func1()
         end
         eee = eee + a * b + a / b
     end
+    return eee
 end
 function func2()
-    for i = 0, 50000 do
+    for i = 0, 100000 do
         UnityUtil.TestFunc2(100, 200)
     end
 end
 function func3()
-    for i = 0, 50000 do
+    for i = 0, 100000 do
         local t = UnityUtil.TestFunc3
         UnityUtil.TestFunc3 = t
     end
 end
 function func4()
-    for i = 0, 50000 do
+    for i = 0, 100000 do
         local t = UnityUtil.TestFunc4
         UnityUtil.TestFunc4 = t
     end
 end
 function func5()
-    for i = 0, 50000 do
+    for i = 0, 100000 do
         UnityUtil.TestFunc5("1", i)
     end
 end

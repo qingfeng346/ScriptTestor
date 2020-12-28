@@ -78,11 +78,11 @@ public class NewBehaviourScript : MonoBehaviour {
     IEnumerator Test()
     {
         var builder = new StringBuilder();
-        yield return StartCoroutine(TestFunc("脚本自身运算", "func1", builder));
-        yield return StartCoroutine(TestFunc("访问c# 函数", "func2", builder));
-        yield return StartCoroutine(TestFunc("访问c# Field", "func3", builder));
-        yield return StartCoroutine(TestFunc("访问c# Property", "func4", builder));
-        yield return StartCoroutine(TestFunc("访问c# 重载函数", "func5", builder));
+        yield return StartCoroutine(TestFunc("访问c# 函数10万次", "func2", builder));
+        yield return StartCoroutine(TestFunc("访问c# Field10万次", "func3", builder));
+        yield return StartCoroutine(TestFunc("访问c# Property10万次", "func4", builder));
+        yield return StartCoroutine(TestFunc("访问c# 重载函数10万次", "func5", builder));
+        yield return StartCoroutine(TestFunc("脚本自身运算100万次", "func1", builder));
         UnityEngine.Debug.LogWarning(builder.ToString());
     }
     IEnumerator TestFunc(string comment, string func, StringBuilder builder) {

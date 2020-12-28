@@ -6,7 +6,7 @@ namespace HotFix_Project
     public class InstanceClass
     {
         // static method
-        public static void func1()
+        public static double func1()
         {
             double eee = 0;
             for (var i = 0; i <= 1000000; ++i) {
@@ -22,26 +22,27 @@ namespace HotFix_Project
                 }
                 eee = eee + a * b + a / b;
             }
+            return eee;
         }
         public static void func2() {
-            for (var i = 0; i <= 50000; ++i) {
+            for (var i = 0; i <= 100000; ++i) {
                 UnityUtil.TestFunc2(100, 200);
             }
         }
         public static void func3() {
-            for (var i = 0; i <= 50000; ++i) {
+            for (var i = 0; i <= 100000; ++i) {
                 var t = UnityUtil.TestFunc3;
                 UnityUtil.TestFunc3 = t;
             }
         }
         public static void func4() {
-            for (var i = 0; i <= 50000; ++i) {
+            for (var i = 0; i <= 100000; ++i) {
                 var t = UnityUtil.TestFunc4;
                 UnityUtil.TestFunc4 = t;
             }
         }
         public static void func5() {
-            for (var i = 0; i <= 50000; ++i) {
+            for (var i = 0; i <= 100000; ++i) {
                 UnityUtil.TestFunc5("1", i);
             }
         }

@@ -16,26 +16,27 @@ function func1() {
         }
         eee = eee + a * b + a / b
     }
+    return eee
 }
 function func2() {
-    for (var i = 0, 50000) {
+    for (var i = 0, 100000) {
         UnityUtil.TestFunc2(100, 200)
     }
 }
 function func3() {
-    for (var i = 0, 50000) {
+    for (var i = 0, 100000) {
         var t = UnityUtil.TestFunc3
         UnityUtil.TestFunc3 = t
     }
 }
 function func4() {
-    for (var i = 0, 50000) {
+    for (var i = 0, 100000) {
         var t = UnityUtil.TestFunc4
         UnityUtil.TestFunc4 = t
     }
 }
 function func5() {
-    for (var i = 0, 50000) {
+    for (var i = 0, 100000) {
         UnityUtil.TestFunc5("1", i)
     }
 }
