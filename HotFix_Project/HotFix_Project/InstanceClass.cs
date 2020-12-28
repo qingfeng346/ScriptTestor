@@ -9,7 +9,7 @@ namespace HotFix_Project
         public static double func1()
         {
             double eee = 0;
-            for (var i = 0; i <= 1000000; ++i) {
+            for (var i = 0; i <= 100000; ++i) {
                 var a = i + 10;
                 var b = 2.3;
                 if (a < b) {
